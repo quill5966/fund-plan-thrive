@@ -1,36 +1,104 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Fund Plan Thrive 💰
 
-## Getting Started
+A speech-first AI personal finance and goal management web application built as a personal project to gain experience utilizing Google Antigravity, LLMs Claude Opus 4.5 Thinking and Gemini 3 Pro High. 
 
-First, run the development server:
+## Features
+
+- **Speech-First AI Advisor** – Talk to your financial advisor naturally using voice input
+- **Intelligent Goal Tracking** – Create and track life goals with AI-generated action steps
+- **Resource Curation** – AI curated resources for each goal step
+- **Dynamic Dashboard** – Visualize your net worth over time and interactively manage your life goals
+
+## Architecture
+
+For a detailed overview of the system architecture, data flows, and technical decisions, see the **[Architecture Design Document](docs/architecture_design.md)**.
+
+### Core Services
+
+| Service | Purpose |
+|---------|---------|
+| **Speech Processing** | Handles audio input/output, transcription via OpenAI Whisper |
+| **AI Advisor** | Orchestrates conversations, manages context, executes tool calls via OpenAI 4o|
+| **Financial Data** | CRUD operations for assets, debts, goals with strict validation |
+| **Resource Curation** | Two-LLM pipeline (OpenAI 4o-mini) for curating goal-step resources |
+
+## Tech Stack 
+
+- **Frontend:** Next.js 16, React 19, Tailwind CSS 4 
+- **Backend:** Next.js API Routes, Vercel AI SDK 5
+- **Database:** PostgreSQL with Drizzle ORM
+- **AI/LLM:** OpenAI GPT-4o, OpenAI GPT-4o-mini, OpenAI Whisper (STT)
+- **Search:** Brave Search API (for resource curation)
+- **Charts:** Recharts
+
+## Prerequisites
+
+- Node.js 18+ 
+- PostgreSQL database
+- API Keys:
+  - OpenAI API Key
+  - Brave Search API Key
+
+## 🚀 Getting Started
+
+### 1. Install Dependencies
+
+```bash
+npm install
+```
+
+### 2. Configure Environment
+
+Create a `.env.local` file with the following variables:
+
+```env
+OPENAI_API_KEY=your_openai_api_key
+BRAVE_API_KEY=your_brave_api_key
+DATABASE_URL=postgresql://user:password@localhost:5432/fundplanthrive
+```
+
+### 3. Set Up Database
+
+```bash
+npx drizzle-kit push
+```
+
+### 4. Run Development Server
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Project Structure
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```
+fund-plan-thrive/
+├── docs/                 # Documentation
+│   └── architecture_design.md
+├── drizzle/              # Database migrations
+├── src/
+│   ├── app/              # Next.js App Router pages
+│   ├── components/       # React components
+│   ├── lib/              # Utilities and configurations
+│   └── services/         # Business logic services
+├── public/               # Static assets
+└── storage/              # Audio file storage 
+```
 
-## Learn More
+## Available Scripts
 
-To learn more about Next.js, take a look at the following resources:
+| Command | Description |
+|---------|-------------|
+| `npm run dev` | Start development server |
+| `npm run build` | Build for production |
+| `npm run start` | Start production server |
+| `npm run lint` | Run ESLint |
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Security
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
 
-## Deploy on Vercel
+## License
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
