@@ -1,0 +1,75 @@
+@import "tailwindcss";
+
+/* ===== Color Palette ===== */
+:root {
+  /* Primary - Fuchsia/Magenta */
+  --primary: #D946EF;
+  --primary-light: #E879F9;
+  --primary-dark: #C026D3;
+
+  /* Charcoal Neutrals */
+  --charcoal-900: #1A1D21;
+  --charcoal-800: #2D3139;
+  --charcoal-700: #3F4451;
+  --charcoal-600: #545969;
+  --charcoal-500: #6B7280;
+  --charcoal-400: #9CA3AF;
+  --charcoal-300: #D1D5DB;
+  --charcoal-200: #E5E7EB;
+  --charcoal-100: #F3F4F6;
+  --charcoal-50: #F9FAFB;
+
+  /* Semantic Colors */
+  --success: #10B981;
+  --success-light: #34D399;
+  --danger: #E17055;
+  --danger-dark: #DC2626;
+
+  /* Light Mode */
+  --background: #E8EAED;
+  --foreground: #1A1D21;
+  --card-bg: #FFFFFF;
+  --card-border: #E5E7EB;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #E8EAED;
+    --foreground: #1A1D21;
+    --card-bg: #FFFFFF;
+    --card-border: #E5E7EB;
+  }
+}
+
+/* ===== Tailwind Theme Extensions ===== */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-primary: var(--primary);
+  --color-primary-light: var(--primary-light);
+  --color-primary-dark: var(--primary-dark);
+  --font-sans: var(--font-inter);
+  --font-mono: var(--font-geist-mono);
+}
+
+/* ===== Base Styles ===== */
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-inter), 'Inter', system-ui, -apple-system, sans-serif;
+  font-feature-settings: 'cv11' 1, 'ss01' 1;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ===== Utility Classes ===== */
+.numeric {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+
+.currency {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+  font-weight: 600;
+}
