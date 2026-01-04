@@ -57,6 +57,17 @@ export default function Home() {
     }
   };
 
+  const handleRestart = async () => {
+    // Clear the userId cookie by calling an API that expires it
+    await fetch("/api/session", { method: "DELETE" });
+
+    // Reset all state
+    setUserName("");
+    setHasStarted(false);
+    setInitialMessages([]);
+    setInitialConversationId(null);
+  };
+
   // Show loading state while checking session
   if (isLoading) {
     return (
@@ -113,6 +124,15 @@ export default function Home() {
             >
               {hasStarted ? "Consultation Started" : "Start Consultation"}
             </button>
+
+            {hasStarted && (
+              <button
+                onClick={handleRestart}
+                className="w-full py-2 px-4 rounded-xl font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 transition-all duration-200"
+              >
+                Restart as a New User
+              </button>
+            )}
           </div>
         </Card>
 
