@@ -1,116 +1,71 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { Button, Input, Card, FileUpload } from "@/components/ui";
+import { Input, Card } from "@/components/ui";
+import { VoiceChat } from "@/components/chat";
 
 export default function Home() {
-  const router = useRouter();
   const [userName, setUserName] = useState("");
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [result, setResult] = useState<{
-    success: boolean;
-    transcription?: string;
-    error?: string;
-  } | null>(null);
+  const [hasStarted, setHasStarted] = useState(false);
 
-  const handleProcess = async () => {
-    if (!selectedFile) {
-      setResult({ success: false, error: "Please select an audio file." });
-      return;
-    }
-
-    if (!userName.trim()) {
-      setResult({ success: false, error: "Please enter your name." });
-      return;
-    }
-
-    setIsLoading(true);
-    setResult(null);
-
-    try {
-      const formData = new FormData();
-      formData.append("audio", selectedFile);
-      formData.append("userId", userName.trim());
-
-      const response = await fetch("/api/process-audio", {
-        method: "POST",
-        body: formData,
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        setResult({ success: false, error: data.error || "Processing failed." });
-      } else {
-        setResult({ success: true, transcription: data.transcription });
-        // Force server components (Navbar) to re-render with new cookie
-        router.refresh();
-      }
-    } catch (error) {
-      console.error("Error:", error);
-      setResult({ success: false, error: "Network error. Please try again." });
-    } finally {
-      setIsLoading(false);
+  const handleStartChat = () => {
+    if (userName.trim()) {
+      setHasStarted(true);
     }
   };
 
   return (
     <div className="min-h-screen bg-[#E8EAED]">
-      <div className="container mx-auto px-4 py-12 max-w-2xl">
+      <div className="container mx-auto px-4 py-8 max-w-3xl">
         {/* Header */}
-        <div className="text-center mb-10">
+        <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-fuchsia-500 to-fuchsia-600 mb-4 shadow-lg shadow-fuchsia-500/30">
             <span className="text-3xl">🏦</span>
           </div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">
             AI Financial Advisor
           </h1>
-          <p className="text-gray-600 dark:text-gray-400">
-            MVP Tester - Upload audio to transcribe
+          <p className="text-gray-600">
+            {hasStarted
+              ? "Let's discuss your financial situation"
+              : "Your personal financial consultation"
+            }
           </p>
         </div>
 
-        {/* Main Card */}
-        <Card className="mb-6">
+        {/* Welcome Card - Always visible */}
+        <Card className="max-w-md mx-auto">
           <div className="space-y-5">
+            <div className="text-center mb-4">
+              <p className="text-black">
+                Welcome! I'll help you review your finances and set goals.
+              </p>
+            </div>
+
             <Input
               label="Your Name"
-              placeholder="Enter your name..."
+              placeholder="Enter your name to begin..."
               value={userName}
               onChange={(e) => setUserName(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleStartChat()}
+              disabled={hasStarted}
             />
 
-            <FileUpload
-              label="Audio File"
-              accept="audio/*"
-              selectedFile={selectedFile}
-              onFileSelect={setSelectedFile}
-            />
-
-            <Button
-              variant="primary"
-              loading={isLoading}
-              onClick={handleProcess}
-              className="w-full"
+            <button
+              onClick={handleStartChat}
+              disabled={!userName.trim() || hasStarted}
+              className="w-full py-3 px-6 rounded-xl font-semibold text-white bg-fuchsia-500 hover:bg-fuchsia-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-md shadow-fuchsia-500/20"
             >
-              🎤 Process Audio
-            </Button>
+              {hasStarted ? "Consultation Started" : "Start Consultation"}
+            </button>
           </div>
         </Card>
 
-        {/* Result Card */}
-        {result && (
-          <Card title={result.success ? "Transcription Result" : "Error"}>
-            {result.success ? (
-              <p className="text-gray-800 dark:text-gray-200 whitespace-pre-wrap">
-                {result.transcription}
-              </p>
-            ) : (
-              <p className="text-red-600 dark:text-red-400">{result.error}</p>
-            )}
-          </Card>
+        {/* Chat Interface - Shown after starting */}
+        {hasStarted && (
+          <div className="mt-6">
+            <VoiceChat userName={userName} />
+          </div>
         )}
       </div>
     </div>

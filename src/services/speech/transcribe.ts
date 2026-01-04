@@ -11,16 +11,16 @@ export const speechService = {
   /**
    * Transcribes an audio file using OpenAI Whisper.
    * @param fileBuffer The buffer of the audio file.
-   * @param mimeType The mime type of the file (e.g., 'audio/mp3').
+   * @param fileName The original filename (used to determine extension).
    */
   async transcribeAudio(fileBuffer: Buffer, fileName: string): Promise<string> {
+    // Generate unique temp filename with timestamp
+    const timestamp = Date.now();
+    const ext = path.extname(fileName) || '.webm';
+    const tmpFileName = `audio_${timestamp}${ext}`;
+    const tmpPath = path.join(process.cwd(), "tmp", tmpFileName);
+
     try {
-      // Whisper requires a file-like object. We can simulate this or write to tmp.
-      // For NodeJS environment properly, we often need to write to a tmp file 
-      // because the SDK expects a ReadStream or File object.
-      
-      const tmpPath = path.join(process.cwd(), "tmp", fileName);
-      
       // Ensure tmp dir exists
       if (!fs.existsSync(path.dirname(tmpPath))) {
         fs.mkdirSync(path.dirname(tmpPath), { recursive: true });
@@ -35,10 +35,23 @@ export const speechService = {
       });
 
       // Cleanup
-      fs.unlinkSync(tmpPath);
+      try {
+        fs.unlinkSync(tmpPath);
+      } catch {
+        // Ignore cleanup errors
+      }
 
       return response.text;
     } catch (error) {
+      // Cleanup on error
+      try {
+        if (fs.existsSync(tmpPath)) {
+          fs.unlinkSync(tmpPath);
+        }
+      } catch {
+        // Ignore cleanup errors
+      }
+
       console.error("Error transcribing audio:", error);
       throw new Error("Failed to transcribe audio.");
     }
@@ -48,16 +61,16 @@ export const speechService = {
    * Helper to simple read a local static file for testing
    */
   async transcribeStaticFile(filePath: string): Promise<string> {
-     const absolutePath = path.resolve(process.cwd(), filePath);
-     if (!fs.existsSync(absolutePath)) {
-         throw new Error(`File not found at ${absolutePath}`);
-     }
-     
-     const response = await openai.audio.transcriptions.create({
-        file: fs.createReadStream(absolutePath),
-        model: "whisper-1",
-      });
-      
-      return response.text;
+    const absolutePath = path.resolve(process.cwd(), filePath);
+    if (!fs.existsSync(absolutePath)) {
+      throw new Error(`File not found at ${absolutePath}`);
+    }
+
+    const response = await openai.audio.transcriptions.create({
+      file: fs.createReadStream(absolutePath),
+      model: "whisper-1",
+    });
+
+    return response.text;
   }
 };

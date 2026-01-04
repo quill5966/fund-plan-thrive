@@ -58,9 +58,11 @@ export const storageService = {
         console.log(`[Storage] Transcription logged: ${id}`);
 
         // 2. Create conversation record in database
+        // NOTE: This service is deprecated in favor of /api/chat
         await db.insert(conversations).values({
             userId: data.userId,
-            transcriptionLogId: id,
+            status: 'completed',
+            summary: `Audio file: ${data.fileName}`,
         });
         console.log(`[Storage] Conversation record created for: ${id}`);
 

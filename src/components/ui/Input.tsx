@@ -21,7 +21,7 @@ export function Input({
             {label && (
                 <label
                     htmlFor={inputId}
-                    className="text-sm font-medium text-gray-700 dark:text-gray-300"
+                    className="text-sm font-medium text-black"
                 >
                     {label}
                 </label>
@@ -32,8 +32,8 @@ export function Input({
           w-full px-4 py-3 rounded-xl
           bg-white/50 dark:bg-white/5
           border border-gray-200 dark:border-white/10
-          text-gray-900 dark:text-white
-          placeholder:text-gray-400 dark:placeholder:text-gray-500
+          text-black
+          placeholder:text-gray-500
           focus:outline-none focus:ring-2 focus:ring-fuchsia-500/50 focus:border-fuchsia-500
           transition-all duration-200
           ${error ? "border-red-500 focus:ring-red-500/50" : ""}

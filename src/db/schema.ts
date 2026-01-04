@@ -55,14 +55,23 @@ export const debtsHistory = pgTable("debts_history", {
   source: text("source").notNull(),
 });
 
-// Conversations table - Links user sessions to transcription logs
+// Conversations table - Chat sessions with the AI advisor
 export const conversations = pgTable("conversations", {
   id: uuid("id").defaultRandom().primaryKey(),
   userId: uuid("user_id").references(() => users.id).notNull(),
-  transcriptionLogId: text("transcription_log_id").notNull(), // References storage file ID (e.g., "txn_1702847123_a3f2")
+  status: text("status").default('active').notNull(), // 'active', 'completed'
   summary: text("summary"), // Optional AI-generated summary of the conversation
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Messages table - Individual chat messages within a conversation
+export const messages = pgTable("messages", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  conversationId: uuid("conversation_id").references(() => conversations.id).notNull(),
+  role: text("role").notNull(), // 'user' | 'assistant'
+  content: text("content").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
 // Goals table

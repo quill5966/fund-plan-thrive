@@ -18,7 +18,7 @@ export default async function GoalsPage() {
                     <div className="text-5xl mb-6">🔒</div>
                     <h2 className="text-2xl font-bold text-gray-900 mb-4">No Active Session</h2>
                     <p className="text-gray-600 mb-8 text-lg">
-                        Please go to the Chat page to upload your financial audio and set up your goals.
+                        Please go to the Chat page and start a conversation with the AI advisor to set up your goals.
                     </p>
                     <Link
                         href="/"
