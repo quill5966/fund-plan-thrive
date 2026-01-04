@@ -15,14 +15,16 @@ interface Message {
 interface VoiceChatProps {
     userName: string;
     onDataExtracted?: () => void;
+    initialMessages?: Message[];
+    initialConversationId?: string | null;
 }
 
-export function VoiceChat({ userName, onDataExtracted }: VoiceChatProps) {
+export function VoiceChat({ userName, onDataExtracted, initialMessages = [], initialConversationId = null }: VoiceChatProps) {
     const router = useRouter();
-    const [messages, setMessages] = useState<Message[]>([]);
+    const [messages, setMessages] = useState<Message[]>(initialMessages);
     const [inputText, setInputText] = useState("");
     const [isLoading, setIsLoading] = useState(false);
-    const [conversationId, setConversationId] = useState<string | null>(null);
+    const [conversationId, setConversationId] = useState<string | null>(initialConversationId);
     const [streamingContent, setStreamingContent] = useState("");
     const messagesEndRef = useRef<HTMLDivElement>(null);
 

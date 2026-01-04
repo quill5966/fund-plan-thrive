@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { MessageSquare, LayoutDashboard, Target } from "lucide-react";
 import clsx from "clsx";
+import { useState, useEffect } from "react";
 
 const navItems = [
     { href: "/", label: "Chat", icon: MessageSquare },
@@ -13,6 +14,23 @@ const navItems = [
 
 export default function Sidebar() {
     const pathname = usePathname();
+    const [userName, setUserName] = useState<string | null>(null);
+
+    useEffect(() => {
+        async function fetchUserName() {
+            try {
+                const response = await fetch("/api/conversation");
+                const data = await response.json();
+                if (data.hasSession && data.userName) {
+                    setUserName(data.userName);
+                }
+            } catch (error) {
+                console.error("Failed to fetch user info:", error);
+            }
+        }
+
+        fetchUserName();
+    }, [pathname]); // Re-fetch when pathname changes (e.g., after starting a session)
 
     return (
         <aside className="w-64 min-h-screen bg-[#2D3139] flex flex-col">
@@ -56,15 +74,18 @@ export default function Sidebar() {
                 </ul>
             </nav>
 
-            {/* User Section (placeholder) */}
+            {/* User Section */}
             <div className="px-4 py-4 border-t border-gray-700">
                 <div className="flex items-center gap-3 px-4 py-2">
                     <div className="w-8 h-8 rounded-full bg-gray-600 flex items-center justify-center">
                         <span className="text-white text-xs">👤</span>
                     </div>
-                    <span className="text-gray-300 text-sm">User</span>
+                    <span className="text-gray-300 text-sm">
+                        {userName || "Guest"}
+                    </span>
                 </div>
             </div>
         </aside>
     );
 }
+

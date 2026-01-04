@@ -1,18 +1,73 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Input, Card } from "@/components/ui";
 import { VoiceChat } from "@/components/chat";
+
+interface ConversationMessage {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+}
+
+interface ConversationData {
+  hasSession: boolean;
+  userName?: string;
+  conversationId?: string | null;
+  messages?: ConversationMessage[];
+}
 
 export default function Home() {
   const [userName, setUserName] = useState("");
   const [hasStarted, setHasStarted] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [initialMessages, setInitialMessages] = useState<ConversationMessage[]>([]);
+  const [initialConversationId, setInitialConversationId] = useState<string | null>(null);
+
+  // Check for existing session on mount
+  useEffect(() => {
+    async function loadExistingSession() {
+      try {
+        const response = await fetch("/api/conversation");
+        const data: ConversationData = await response.json();
+
+        if (data.hasSession && data.userName) {
+          setUserName(data.userName);
+          setHasStarted(true);
+          if (data.messages && data.messages.length > 0) {
+            setInitialMessages(data.messages);
+          }
+          if (data.conversationId) {
+            setInitialConversationId(data.conversationId);
+          }
+        }
+      } catch (error) {
+        console.error("Failed to load session:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    loadExistingSession();
+  }, []);
 
   const handleStartChat = () => {
     if (userName.trim()) {
       setHasStarted(true);
     }
   };
+
+  // Show loading state while checking session
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-[#E8EAED] flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-fuchsia-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#E8EAED]">
@@ -64,7 +119,11 @@ export default function Home() {
         {/* Chat Interface - Shown after starting */}
         {hasStarted && (
           <div className="mt-6">
-            <VoiceChat userName={userName} />
+            <VoiceChat
+              userName={userName}
+              initialMessages={initialMessages}
+              initialConversationId={initialConversationId}
+            />
           </div>
         )}
       </div>
