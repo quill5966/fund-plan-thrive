@@ -134,6 +134,8 @@ export default function DashboardClient({ summary, history, goals }: DashboardCl
                 netWorth={summary.netWorth}
                 totalAssets={summary.totalAssets}
                 totalDebts={summary.totalDebts}
+                assets={summary.assets}
+                debts={summary.debts}
             />
 
             {/* Net Worth Trend Chart */}
