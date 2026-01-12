@@ -98,7 +98,14 @@ fund-plan-thrive/
 
 ## Security
 
+- **API Keys**: Never commit API keys to version control. Use `.env.local` for local development and secure environment variables in production.
+- **Database**: Use connection strings with SSL enabled in production environments.
+- **Audio Files**: Uploaded audio files are stored locally in `/storage` and should be secured appropriately in production.
 
 ## License
 
+This project is licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE).
 
+**TL;DR**: You may view, use, and modify this code for personal, educational, or non-commercial purposes. Commercial use requires written permission from the author.
+
+For third-party dependency licenses, see [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
