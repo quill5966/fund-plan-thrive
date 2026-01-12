@@ -1,6 +1,6 @@
 # Fund Plan Thrive 💰
 
-A speech-first AI personal finance and goal management web application built as a personal project to gain experience utilizing Google Antigravity, LLMs Claude Opus 4.5 Thinking and Gemini 3 Pro High. 
+A speech-first AI personal finance and goal management web application built as a personal project to gain experience utilizing Google Antigravity, LLMs Claude Opus 4.5 Thinking and Gemini 3 Pro. 
 
 ## Features
 
