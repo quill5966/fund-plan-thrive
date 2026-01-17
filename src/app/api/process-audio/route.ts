@@ -65,6 +65,7 @@ export async function POST(request: NextRequest) {
             advisor: {
                 actionsPerformed: advisorResult.actionsPerformed,
                 llmResponse: advisorResult.llmResponse,
+                pendingConfirmation: advisorResult.pendingConfirmation,
             },
         });
 

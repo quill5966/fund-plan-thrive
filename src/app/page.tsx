@@ -17,12 +17,20 @@ interface ConversationData {
   messages?: ConversationMessage[];
 }
 
+/**
+ * TODO: AUTH_REFACTOR
+ * - Replace name input with auth provider's login/signup flow
+ * - Use auth session to determine if user exists (not just conversation history)
+ * - isNewUser should be based on user account creation, not conversation history
+ */
 export default function Home() {
   const [userName, setUserName] = useState("");
   const [hasStarted, setHasStarted] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [initialMessages, setInitialMessages] = useState<ConversationMessage[]>([]);
   const [initialConversationId, setInitialConversationId] = useState<string | null>(null);
+  // New user = no conversation history (will trigger welcome message)
+  const [isNewUser, setIsNewUser] = useState(true);
 
   // Check for existing session on mount
   useEffect(() => {
@@ -36,6 +44,8 @@ export default function Home() {
           setHasStarted(true);
           if (data.messages && data.messages.length > 0) {
             setInitialMessages(data.messages);
+            // Returning user has conversation history
+            setIsNewUser(false);
           }
           if (data.conversationId) {
             setInitialConversationId(data.conversationId);
@@ -66,6 +76,7 @@ export default function Home() {
     setHasStarted(false);
     setInitialMessages([]);
     setInitialConversationId(null);
+    setIsNewUser(true); // Reset to trigger welcome message for next user
   };
 
   // Show loading state while checking session
@@ -143,6 +154,7 @@ export default function Home() {
               userName={userName}
               initialMessages={initialMessages}
               initialConversationId={initialConversationId}
+              isNewUser={isNewUser}
             />
           </div>
         )}

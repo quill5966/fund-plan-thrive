@@ -12,14 +12,21 @@ interface Message {
     content: string;
 }
 
+/**
+ * TODO: AUTH_REFACTOR
+ * - isNewUser prop currently based on conversation history
+ * - With proper auth, this could be based on user account creation timestamp
+ * - userName would come from auth session instead of being passed as prop
+ */
 interface VoiceChatProps {
     userName: string;
     onDataExtracted?: () => void;
     initialMessages?: Message[];
     initialConversationId?: string | null;
+    isNewUser?: boolean;
 }
 
-export function VoiceChat({ userName, onDataExtracted, initialMessages = [], initialConversationId = null }: VoiceChatProps) {
+export function VoiceChat({ userName, onDataExtracted, initialMessages = [], initialConversationId = null, isNewUser = false }: VoiceChatProps) {
     const router = useRouter();
     const [messages, setMessages] = useState<Message[]>(initialMessages);
     const [inputText, setInputText] = useState("");
@@ -50,6 +57,44 @@ export function VoiceChat({ userName, onDataExtracted, initialMessages = [], ini
             clearRecording();
         }
     }, [audioBlob]);
+
+    // Initialize conversation with welcome message for new users
+    useEffect(() => {
+        if (!isNewUser || initialMessages.length > 0 || conversationId) {
+            // Skip if not a new user, or if there are already messages/conversation
+            return;
+        }
+
+        async function initializeNewUserConversation() {
+            setIsLoading(true);
+            try {
+                const response = await fetch("/api/init-conversation", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ userName }),
+                });
+
+                if (!response.ok) {
+                    throw new Error("Failed to initialize conversation");
+                }
+
+                const data = await response.json();
+                setConversationId(data.conversationId);
+                // API returns messages array (works for both new users and returning users)
+                setMessages(data.messages.map((m: { id: string; role: string; content: string }) => ({
+                    id: m.id,
+                    role: m.role as "user" | "assistant",
+                    content: m.content,
+                })));
+            } catch (error) {
+                console.error("Error initializing conversation:", error);
+            } finally {
+                setIsLoading(false);
+            }
+        }
+
+        initializeNewUserConversation();
+    }, [isNewUser, userName, initialMessages.length, conversationId]);
 
     const sendMessage = useCallback(async (text?: string, audio?: Blob) => {
         const messageContent = text || "";

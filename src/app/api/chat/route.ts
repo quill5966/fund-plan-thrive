@@ -47,6 +47,10 @@ const updateAssetSchema = z.object({
     name: z.string().describe("Account nickname (e.g., 'Chase Checking', 'Fidelity 401k')"),
     amount: z.number().describe("Current balance"),
     effectiveDate: z.string().optional().describe("Date when this balance was valid (ISO format)"),
+    // Deduplication fields
+    confidenceLevel: z.enum(["high", "low"]).optional().describe("Set to 'low' if unsure this is a new/distinct account vs an existing one"),
+    existingAccountName: z.string().optional().describe("If this updates an existing account with a new/clarified name, provide the OLD name here"),
+    isNameClarification: z.boolean().optional().describe("True if user is clarifying/enriching an existing account's name (e.g., adding bank name or purpose)"),
 });
 
 const updateDebtSchema = z.object({
@@ -54,6 +58,10 @@ const updateDebtSchema = z.object({
     name: z.string().describe("Account nickname (e.g., 'Chase Sapphire', 'Student Loan')"),
     amount: z.number().describe("Current balance owed"),
     effectiveDate: z.string().optional().describe("Date when this balance was valid (ISO format)"),
+    // Deduplication fields
+    confidenceLevel: z.enum(["high", "low"]).optional().describe("Set to 'low' if unsure this is a new/distinct debt vs an existing one"),
+    existingAccountName: z.string().optional().describe("If this updates an existing debt with a new/clarified name, provide the OLD name here"),
+    isNameClarification: z.boolean().optional().describe("True if user is clarifying/enriching an existing debt's name (e.g., adding bank name or purpose)"),
 });
 
 const createGoalSchema = z.object({
@@ -141,19 +149,54 @@ export async function POST(request: NextRequest) {
             content: m.content,
         }));
 
-        // 6. Fetch existing goals for context
+        // 6. Fetch existing goals and financial data for context
         const existingGoals = await financeService.getGoals(user.id);
         const goalsContext = existingGoals.length > 0
             ? "\n\nCurrent Goals:\n" + existingGoals.map(g => `- [${g.id}] ${g.title}: ${g.status}`).join("\n")
             : "";
+
+        // Fetch existing assets/debts for deduplication context
+        const existingFinances = await financeService.getFinancialSummary(user.id);
+        const assetsContext = existingFinances.assets.length > 0
+            ? "\n\nCurrent Assets:\n" + existingFinances.assets.map(a =>
+                `- [${a.type}] "${a.name}": $${a.value}`).join("\n")
+            : "";
+        const debtsContext = existingFinances.debts.length > 0
+            ? "\n\nCurrent Debts:\n" + existingFinances.debts.map(d =>
+                `- [${d.type}] "${d.name}": $${d.value}`).join("\n")
+            : "";
+
+        const dedupInstructions = `
+
+**DEDUPLICATION RULES** (CRITICAL):
+- Review the 'Current Assets' and 'Current Debts' lists above before calling any update tool
+- If user mentions an account that CLEARLY matches an existing one (same name or very similar), use the EXACT existing name
+- If user provides MORE DETAIL about an existing account (e.g., adding bank name like "my checking" → "Chase checking"), this is a name clarification:
+    * Set isNameClarification=true
+    * Set existingAccountName to the OLD name from the list
+    * Set name to the NEW clarified name
+- **IF UNSURE whether a new account matches an existing one** (e.g., similar amounts but different descriptions, or user mentions a bank name not in the list):
+    * DO NOT call the tool yet
+    * Instead, ASK THE USER directly: "I noticed you already have [existing account] with $[amount]. Is your [new account description] the same account, or is this a separate one?"
+    * Wait for user's response before proceeding
+    * If user confirms it's the same: use isNameClarification=true with existingAccountName
+    * If user says it's different: create a new record with a distinct name`;
 
         // Create tools with user context closure
         const createTools = (userId: string) => ({
             update_asset: tool({
                 description: "Record an asset (bank account, investment, retirement, etc.)",
                 inputSchema: updateAssetSchema,
-                execute: async ({ type, name, amount, effectiveDate }) => {
+                execute: async ({ type, name, amount, effectiveDate, confidenceLevel, existingAccountName, isNameClarification }) => {
                     const date = effectiveDate ? new Date(effectiveDate) : new Date();
+
+                    // Handle name clarification - merge with existing account
+                    if (isNameClarification && existingAccountName) {
+                        await financeService.mergeAsset(userId, existingAccountName, name, type, amount, date);
+                        return { success: true, message: `Updated ${existingAccountName} to ${name}: $${amount.toLocaleString()}` };
+                    }
+
+                    // Standard upsert (low confidence cases will still create - UI handles confirmation)
                     await financeService.upsertAsset(userId, type, name, amount, date, "user_input", true);
                     return { success: true, message: `Recorded ${name}: $${amount.toLocaleString()}` };
                 },
@@ -161,8 +204,16 @@ export async function POST(request: NextRequest) {
             update_debt: tool({
                 description: "Record a debt (credit card, loan, mortgage, etc.)",
                 inputSchema: updateDebtSchema,
-                execute: async ({ type, name, amount, effectiveDate }) => {
+                execute: async ({ type, name, amount, effectiveDate, confidenceLevel, existingAccountName, isNameClarification }) => {
                     const date = effectiveDate ? new Date(effectiveDate) : new Date();
+
+                    // Handle name clarification - merge with existing debt
+                    if (isNameClarification && existingAccountName) {
+                        await financeService.mergeDebt(userId, existingAccountName, name, type, amount, date);
+                        return { success: true, message: `Updated ${existingAccountName} to ${name}: $${amount.toLocaleString()}` };
+                    }
+
+                    // Standard upsert
                     await financeService.upsertDebt(userId, type, name, amount, date, "user_input", true);
                     return { success: true, message: `Recorded ${name}: $${amount.toLocaleString()}` };
                 },
@@ -194,7 +245,7 @@ export async function POST(request: NextRequest) {
         // 7. Stream response
         const result = streamText({
             model: openai("gpt-4o"),
-            system: SYSTEM_PROMPT + goalsContext,
+            system: SYSTEM_PROMPT + goalsContext + assetsContext + debtsContext + dedupInstructions,
             messages: messagesForLLM,
             tools: createTools(user.id),
             stopWhen: stepCountIs(10),

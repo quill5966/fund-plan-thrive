@@ -139,6 +139,123 @@ export const financeService = {
         });
     },
 
+    /**
+     * Merge an asset when user clarifies/updates an existing account.
+     * Handles name changes and smart value updates based on date.
+     */
+    async mergeAsset(
+        userId: string,
+        existingName: string,    // Old name to find
+        newName: string,         // New/clarified name
+        type: string,
+        value: number,
+        effectiveDate: Date = new Date()
+    ) {
+        const lockKey = `asset:${userId}:${existingName.trim().toLowerCase()}`;
+
+        return runSerialized(lockKey, async () => {
+            // 1. Find existing asset for THIS USER by old name
+            // Note: userId is the PRIMARY filter - ensures we only match assets belonging to current user
+            const existing = await db.select().from(assets)
+                .where(and(
+                    eq(assets.userId, userId),  // Primary filter: user ownership
+                    sql`lower(${assets.name}) = lower(${existingName.trim()})`,
+                    eq(assets.type, type)
+                )).limit(1);
+
+            if (!existing.length) {
+                throw new Error(`No existing asset found: ${existingName}`);
+            }
+
+            const asset = existing[0];
+
+            // 2. Build update object
+            const updates: Record<string, unknown> = { updatedDate: new Date() };
+
+            // Update name if it's a clarification (always update to more specific name)
+            if (newName.trim().toLowerCase() !== existingName.trim().toLowerCase()) {
+                updates.name = newName.trim();
+            }
+
+            // 3. Handle value update based on date
+            if (effectiveDate >= asset.effectiveDate) {
+                // New data is more recent → update main record
+                updates.value = sql`${value}`;
+                updates.effectiveDate = effectiveDate;
+            }
+            // Otherwise, only add to history (not main record)
+
+            await db.update(assets).set(updates).where(eq(assets.id, asset.id));
+
+            // 4. Always add to history
+            await db.insert(assetsHistory).values({
+                assetId: asset.id,
+                value: sql`${value}`,
+                effectiveDate,
+                source: "user_input"
+            });
+
+            return { assetId: asset.id, merged: true, nameUpdated: updates.name !== undefined };
+        });
+    },
+
+    /**
+     * Merge a debt when user clarifies/updates an existing account.
+     * Handles name changes and smart value updates based on date.
+     */
+    async mergeDebt(
+        userId: string,
+        existingName: string,    // Old name to find
+        newName: string,         // New/clarified name
+        type: string,
+        value: number,
+        effectiveDate: Date = new Date()
+    ) {
+        const lockKey = `debt:${userId}:${existingName.trim().toLowerCase()}`;
+
+        return runSerialized(lockKey, async () => {
+            // 1. Find existing debt for THIS USER by old name
+            const existing = await db.select().from(debts)
+                .where(and(
+                    eq(debts.userId, userId),  // Primary filter: user ownership
+                    sql`lower(${debts.name}) = lower(${existingName.trim()})`,
+                    eq(debts.type, type)
+                )).limit(1);
+
+            if (!existing.length) {
+                throw new Error(`No existing debt found: ${existingName}`);
+            }
+
+            const debt = existing[0];
+
+            // 2. Build update object
+            const updates: Record<string, unknown> = { updatedDate: new Date() };
+
+            // Update name if it's a clarification
+            if (newName.trim().toLowerCase() !== existingName.trim().toLowerCase()) {
+                updates.name = newName.trim();
+            }
+
+            // 3. Handle value update based on date
+            if (effectiveDate >= debt.effectiveDate) {
+                updates.value = sql`${value}`;
+                updates.effectiveDate = effectiveDate;
+            }
+
+            await db.update(debts).set(updates).where(eq(debts.id, debt.id));
+
+            // 4. Always add to history
+            await db.insert(debtsHistory).values({
+                debtId: debt.id,
+                value: sql`${value}`,
+                effectiveDate,
+                source: "user_input"
+            });
+
+            return { debtId: debt.id, merged: true, nameUpdated: updates.name !== undefined };
+        });
+    },
+
     async getFinancialSummary(userId: string) {
         // Gets the LATEST known state from the main tables
         // Filter out inactive items for the current summary

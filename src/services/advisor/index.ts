@@ -6,9 +6,13 @@ import { curateResourcesForGoal } from "@/services/resources";
 
 const getCurrentDate = () => new Date().toISOString().split('T')[0];
 
-const getSystemPrompt = (currentGoalsContext: string) => `You are a financial data extraction assistant. 
+const getSystemPrompt = (currentGoalsContext: string, assetsContext: string, debtsContext: string) => `You are a financial data extraction assistant. 
 Your job: Parse user statements about their finances and life goals, and call the appropriate tools.
 Current Date: ${getCurrentDate()} (Use this to resolve relative dates like "today", "last month", "October")
+
+${assetsContext}
+
+${debtsContext}
 
 ${currentGoalsContext}
 
@@ -19,6 +23,19 @@ Rules:
 - Extract DATE as a datetime (assume Mountain Standard Time). Default to Current Date if not specified.
 - Use distinct, specific names (e.g., 'Student Loan', 'Car Loan') rather than generic ones. 
 - Distinct debts must have different names to be stored separately.
+- **DEDUPLICATION RULES** (CRITICAL):
+    - Review the 'Current Assets' and 'Current Debts' lists above before calling any update tool
+    - If user mentions an account that CLEARLY matches an existing one (same name or very similar), use the EXACT existing name
+    - If user provides MORE DETAIL about an existing account (e.g., adding bank name like "my checking" → "Chase checking"), this is a name clarification:
+        * Set isNameClarification=true
+        * Set existingAccountName to the OLD name from the list
+        * Set name to the NEW clarified name
+    - **IF UNSURE whether a new account matches an existing one** (e.g., similar amounts but different descriptions, or user mentions a bank name not in the list):
+        * DO NOT call the tool yet
+        * Instead, ASK THE USER directly: "I noticed you already have [existing account] with $[amount]. Is your [new account description] the same account, or is this a separate one?"
+        * Wait for user's response before proceeding
+        * If user confirms it's the same: use isNameClarification=true with existingAccountName
+        * If user says it's different: create a new record with a distinct name
 - If user mentions PAST balances (history), call the tool SEPARATELY for each data point with its specific effectiveDate.
 - If user says they "closed" an account, call close_account
 - **GOAL EXTRACTION**:
@@ -39,6 +56,10 @@ const updateAssetSchema = z.object({
     name: z.string().describe("Account nickname (e.g., 'Chase Checking'). Use specific names to distinguish between multiple assets."),
     amount: z.number().describe("Current balance"),
     effectiveDate: z.string().optional().describe("Date when this balance was valid (ISO format)"),
+    // Deduplication fields
+    confidenceLevel: z.enum(["high", "low"]).optional().describe("Set to 'low' if unsure this is a new/distinct account vs an existing one"),
+    existingAccountName: z.string().optional().describe("If this updates an existing account with a new/clarified name, provide the OLD name here"),
+    isNameClarification: z.boolean().optional().describe("True if user is clarifying/enriching an existing account's name (e.g., adding bank name or purpose)"),
 });
 
 const updateDebtSchema = z.object({
@@ -46,6 +67,10 @@ const updateDebtSchema = z.object({
     name: z.string().describe("Account nickname (e.g., 'Chase Sapphire'). Use specific names to distinguish between multiple debts."),
     amount: z.number().describe("Current balance owed"),
     effectiveDate: z.string().optional().describe("Date when this balance was valid (ISO format)"),
+    // Deduplication fields
+    confidenceLevel: z.enum(["high", "low"]).optional().describe("Set to 'low' if unsure this is a new/distinct debt vs an existing one"),
+    existingAccountName: z.string().optional().describe("If this updates an existing debt with a new/clarified name, provide the OLD name here"),
+    isNameClarification: z.boolean().optional().describe("True if user is clarifying/enriching an existing debt's name (e.g., adding bank name or purpose)"),
 });
 
 const closeAccountSchema = z.object({
@@ -72,11 +97,24 @@ const updateGoalSchema = z.object({
     newSteps: z.array(z.string()).optional().describe("New steps to append to the goal")
 });
 
+interface PendingConfirmation {
+    entityType: "asset" | "debt";
+    pendingAction: {
+        type: string;
+        name: string;
+        amount: number;
+        effectiveDate?: string;
+    };
+    potentialMatches: { name: string; value: number }[];
+    message: string;
+}
+
 interface AdvisorResult {
     success: boolean;
     actionsPerformed: string[];
     llmResponse?: string;
     error?: string;
+    pendingConfirmation?: PendingConfirmation;
 }
 
 export const advisorService = {
@@ -93,16 +131,48 @@ export const advisorService = {
                 ? "Current Goals:\n" + existingGoals.map(g => `- [${g.id}] ${g.title}: ${g.status} (Progress: $${g.currentAmount}/$${g.targetAmount})`).join("\n")
                 : "Current Goals: None";
 
+            // 2. Fetch existing assets/debts for deduplication context
+            const existingFinances = await financeService.getFinancialSummary(userId);
+            const assetsContext = existingFinances.assets.length > 0
+                ? "Current Assets:\n" + existingFinances.assets.map(a =>
+                    `- [${a.type}] "${a.name}": $${a.value}`).join("\n")
+                : "Current Assets: None";
+            const debtsContext = existingFinances.debts.length > 0
+                ? "Current Debts:\n" + existingFinances.debts.map(d =>
+                    `- [${d.type}] "${d.name}": $${d.value}`).join("\n")
+                : "Current Debts: None";
+
             const result = await generateText({
                 model: openai("gpt-4o"),
-                system: getSystemPrompt(goalsContext),
+                system: getSystemPrompt(goalsContext, assetsContext, debtsContext),
                 prompt: transcribedText,
                 tools: {
                     update_asset: tool({
                         description: "Update or create an asset record (bank account, investment, etc.)",
                         inputSchema: updateAssetSchema,
-                        execute: async ({ type, name, amount, effectiveDate }) => {
+                        execute: async ({ type, name, amount, effectiveDate, confidenceLevel, existingAccountName, isNameClarification }) => {
                             const date = effectiveDate ? new Date(effectiveDate) : new Date();
+
+                            // Handle low confidence - return for user confirmation
+                            if (confidenceLevel === "low") {
+                                return {
+                                    needsConfirmation: true,
+                                    pendingAction: { entityType: "asset", type, name, amount, effectiveDate },
+                                    potentialMatches: existingFinances.assets
+                                        .filter(a => a.type === type)
+                                        .map(a => ({ name: a.name, value: Number(a.value) })),
+                                    message: `Is "${name}" the same as one of your existing accounts?`
+                                };
+                            }
+
+                            // Handle name clarification - merge with existing account
+                            if (isNameClarification && existingAccountName) {
+                                await financeService.mergeAsset(userId, existingAccountName, name, type, amount, date);
+                                actionsPerformed.push(`Merged asset: ${existingAccountName} → ${name} (${type}) = $${amount}`);
+                                return { success: true, message: `Updated ${existingAccountName} to ${name}` };
+                            }
+
+                            // Standard upsert
                             await financeService.upsertAsset(userId, type, name, amount, date, "user_input", true);
                             actionsPerformed.push(`Updated asset: ${name} (${type}) = $${amount}`);
                             return { success: true, message: `Updated ${name}` };
@@ -111,8 +181,29 @@ export const advisorService = {
                     update_debt: tool({
                         description: "Update or create a debt record (credit card, loan, mortgage)",
                         inputSchema: updateDebtSchema,
-                        execute: async ({ type, name, amount, effectiveDate }) => {
+                        execute: async ({ type, name, amount, effectiveDate, confidenceLevel, existingAccountName, isNameClarification }) => {
                             const date = effectiveDate ? new Date(effectiveDate) : new Date();
+
+                            // Handle low confidence - return for user confirmation
+                            if (confidenceLevel === "low") {
+                                return {
+                                    needsConfirmation: true,
+                                    pendingAction: { entityType: "debt", type, name, amount, effectiveDate },
+                                    potentialMatches: existingFinances.debts
+                                        .filter(d => d.type === type)
+                                        .map(d => ({ name: d.name, value: Number(d.value) })),
+                                    message: `Is "${name}" the same as one of your existing debts?`
+                                };
+                            }
+
+                            // Handle name clarification - merge with existing debt
+                            if (isNameClarification && existingAccountName) {
+                                await financeService.mergeDebt(userId, existingAccountName, name, type, amount, date);
+                                actionsPerformed.push(`Merged debt: ${existingAccountName} → ${name} (${type}) = $${amount}`);
+                                return { success: true, message: `Updated ${existingAccountName} to ${name}` };
+                            }
+
+                            // Standard upsert
                             await financeService.upsertDebt(userId, type, name, amount, date, "user_input", true);
                             actionsPerformed.push(`Updated debt: ${name} (${type}) = $${amount}`);
                             return { success: true, message: `Updated ${name}` };
