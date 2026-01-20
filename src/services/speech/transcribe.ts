@@ -1,6 +1,7 @@
 import OpenAI from "openai";
 import fs from "fs";
 import path from "path";
+import os from "os";
 
 // Initialize OpenAI client
 const openai = new OpenAI({
@@ -18,7 +19,7 @@ export const speechService = {
     const timestamp = Date.now();
     const ext = path.extname(fileName) || '.webm';
     const tmpFileName = `audio_${timestamp}${ext}`;
-    const tmpPath = path.join(process.cwd(), "tmp", tmpFileName);
+    const tmpPath = path.join(os.tmpdir(), "fund-plan-thrive", tmpFileName);
 
     try {
       // Ensure tmp dir exists
