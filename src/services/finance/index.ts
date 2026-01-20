@@ -1,6 +1,22 @@
 import { db } from "@/db";
 import { assets, debts, assetsHistory, debtsHistory, goals, goalSteps, goalResources } from "@/db/schema";
 import { eq, sql, and, desc } from "drizzle-orm";
+import { distance } from "fastest-levenshtein";
+
+// Similarity threshold for goal deduplication (0-1 scale, where 1 = exact match)
+const GOAL_SIMILARITY_THRESHOLD = 0.7;
+
+/**
+ * Calculate similarity between two strings using Levenshtein distance.
+ * Returns a value between 0 and 1, where 1 indicates identical strings.
+ */
+function calculateSimilarity(str1: string, str2: string): number {
+    const s1 = str1.toLowerCase().trim();
+    const s2 = str2.toLowerCase().trim();
+    const maxLen = Math.max(s1.length, s2.length);
+    if (maxLen === 0) return 1; // Both strings are empty
+    return 1 - distance(s1, s2) / maxLen;
+}
 
 // In-memory lock to serialize upserts for the same entity (User + Name)
 // This prevents race conditions where parallel calls both see "no record" and insert duplicates.
@@ -376,44 +392,61 @@ export const financeService = {
         steps: { description: string; isUserDefined: boolean }[];
         resources?: { stepIndex: number; title: string; url: string }[];  // Optional - resources now curated async
     }) {
-        return await db.transaction(async (tx) => {
-            // 1. Create Goal
-            const newGoal = await tx.insert(goals).values({
-                userId,
-                title: data.title,
-                description: data.description,
-                targetAmount: data.targetAmount ? sql`${data.targetAmount}` : null,
-                currentAmount: data.currentAmount ? sql`${data.currentAmount}` : sql`0`,
-                status: 'active'
-            }).returning();
-            const goalId = newGoal[0].id;
+        // Serialize all goal creation for this user to prevent race conditions
+        const lockKey = `goal:${userId}`;
 
-            // 2. Create Steps and Resources
-            for (let i = 0; i < data.steps.length; i++) {
-                const step = data.steps[i];
-                const newStep = await tx.insert(goalSteps).values({
-                    goalId,
-                    description: step.description,
-                    order: `${i + 1}`,
-                    isCompleted: false,
-                    isUserDefined: step.isUserDefined
-                }).returning();
-                const stepId = newStep[0].id;
+        return runSerialized(lockKey, async () => {
+            // 1. Check for existing goals with similar titles (fuzzy deduplication)
+            const existingGoals = await db.select().from(goals).where(eq(goals.userId, userId));
 
-                // 3. Create Resources for this step (if any provided - usually none, curated async later)
-                const stepResourcesList = (data.resources ?? []).filter(r => r.stepIndex === i);
-                if (stepResourcesList.length > 0) {
-                    await tx.insert(goalResources).values(
-                        stepResourcesList.map(r => ({
-                            stepId,
-                            title: r.title,
-                            url: r.url
-                        }))
-                    );
+            for (const existing of existingGoals) {
+                const similarity = calculateSimilarity(data.title, existing.title);
+                if (similarity >= GOAL_SIMILARITY_THRESHOLD) {
+                    console.log(`[Goal Dedup] "${data.title}" matched "${existing.title}" (score: ${similarity.toFixed(2)})`);
+                    return { goalId: existing.id, deduplicated: true };
                 }
             }
 
-            return { goalId };
+            // 2. No duplicate found - create new goal in transaction
+            return await db.transaction(async (tx) => {
+                // Create Goal
+                const newGoal = await tx.insert(goals).values({
+                    userId,
+                    title: data.title,
+                    description: data.description,
+                    targetAmount: data.targetAmount ? sql`${data.targetAmount}` : null,
+                    currentAmount: data.currentAmount ? sql`${data.currentAmount}` : sql`0`,
+                    status: 'active'
+                }).returning();
+                const goalId = newGoal[0].id;
+
+                // Create Steps and Resources
+                for (let i = 0; i < data.steps.length; i++) {
+                    const step = data.steps[i];
+                    const newStep = await tx.insert(goalSteps).values({
+                        goalId,
+                        description: step.description,
+                        order: `${i + 1}`,
+                        isCompleted: false,
+                        isUserDefined: step.isUserDefined
+                    }).returning();
+                    const stepId = newStep[0].id;
+
+                    // Create Resources for this step (if any provided - usually none, curated async later)
+                    const stepResourcesList = (data.resources ?? []).filter(r => r.stepIndex === i);
+                    if (stepResourcesList.length > 0) {
+                        await tx.insert(goalResources).values(
+                            stepResourcesList.map(r => ({
+                                stepId,
+                                title: r.title,
+                                url: r.url
+                            }))
+                        );
+                    }
+                }
+
+                return { goalId, deduplicated: false };
+            });
         });
     },
 

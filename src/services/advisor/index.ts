@@ -229,6 +229,16 @@ export const advisorService = {
                         execute: async (data) => {
                             const result = await financeService.createGoal(userId, data);
 
+                            // Check if this was a duplicate (existing goal returned)
+                            if (result.deduplicated) {
+                                actionsPerformed.push(`Found existing goal similar to: ${data.title}`);
+                                return {
+                                    success: true,
+                                    existingGoalId: result.goalId,
+                                    message: `A similar goal already exists (ID: ${result.goalId}). Use update_goal if you need to modify it.`
+                                };
+                            }
+
                             // Trigger async resource curation (fire-and-forget)
                             // This runs in background without blocking the conversation
                             curateResourcesForGoal(result.goalId, data.title)
