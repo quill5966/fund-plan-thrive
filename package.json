@@ -6,7 +6,11 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate:local": "drizzle-kit migrate",
+    "db:migrate:neon": "dotenv -e .env.neon -- drizzle-kit migrate",
+    "db:migrate:all": "npm run db:migrate:local && npm run db:migrate:neon"
   },
   "dependencies": {
     "@ai-sdk/openai": "^2.0.88",
@@ -30,6 +34,7 @@
     "@types/pg": "^8.16.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "dotenv-cli": "^11.0.0",
     "drizzle-kit": "^0.31.8",
     "eslint": "^9",
     "eslint-config-next": "16.0.10",
