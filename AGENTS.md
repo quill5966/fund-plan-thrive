@@ -55,6 +55,10 @@ fund-plan-thrive/
 │   │   ├── schema.ts           # Drizzle schema definitions (ALL TABLES)
 │   │   └── index.ts            # DB connection export
 │   │
+│   ├── lib/
+│   │   ├── session.ts            # Iron-session config + helpers
+│   │   └── validation.ts         # Input + tool call parameter validation
+│   │
 │   ├── services/               # Business logic layer
 │   │   ├── advisor/            # AI Advisor - LLM orchestration + tool calling
 │   │   ├── finance/            # CRUD for assets, debts, goals (deterministic)
@@ -171,6 +175,15 @@ VoiceChat (record) → /api/chat (session check) → speechService.transcribe
     → LLM with tools → financeService (tool execution) → response → UI
 ```
 
+### Input & Tool Call Guardrails
+- Text input capped at 2,000 characters (`src/lib/validation.ts`)
+- Tool `execute()` functions validate parameters before any DB write:
+  - `amount`: ≥ 0 and ≤ $50M
+  - `name`: ≤ 100 chars, alphanumeric + basic punctuation
+  - `effectiveDate`: must parse to a valid date within ±30 years
+- System prompts include anti-injection instructions
+- These are deterministic code guards — no secondary LLM classifier
+
 ### Historical Data Tracking
 - `effectiveDate` = when the balance was true (user-reported date)
 - `updatedDate` = when the system recorded it
@@ -227,10 +240,11 @@ SESSION_PASSWORD=     # Required - 32+ char static key for iron-session encrypti
 ## Gotchas & Notes
 
 1. **Passphrase-gated access** - Uses iron-session with APP_PASSPHRASE; swap for NextAuth.js OAuth for multi-user
-2. **Brave API rate limit** - Free tier is 1 req/sec; resource curation runs sequentially
-3. **Audio stored locally** - `/storage` folder, git-ignored
-4. **Forward-fill charts** - Dashboard densifies sparse historical data to monthly intervals
-5. **Conversational dedup** - AI asks clarifying questions for potential duplicate accounts
+2. **Tool call validation** - All LLM tool calls pass through deterministic validation before DB writes (`src/lib/validation.ts`)
+3. **Brave API rate limit** - Free tier is 1 req/sec; resource curation runs sequentially
+4. **Audio stored locally** - `/storage` folder, git-ignored
+5. **Forward-fill charts** - Dashboard densifies sparse historical data to monthly intervals
+6. **Conversational dedup** - AI asks clarifying questions for potential duplicate accounts
 
 ---
 
