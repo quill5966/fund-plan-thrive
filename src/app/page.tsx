@@ -17,13 +17,14 @@ interface ConversationData {
   messages?: ConversationMessage[];
 }
 
-/**
- * TODO: AUTH_REFACTOR
- * - Replace name input with auth provider's login/signup flow
- * - Use auth session to determine if user exists (not just conversation history)
- * - isNewUser should be based on user account creation, not conversation history
- */
 export default function Home() {
+  // ── Passphrase gate state ──────────────────────────────────────
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [passphrase, setPassphrase] = useState("");
+  const [passphraseError, setPassphraseError] = useState("");
+  const [isAuthLoading, setIsAuthLoading] = useState(false);
+
+  // ── Existing consultation state ────────────────────────────────
   const [userName, setUserName] = useState("");
   const [hasStarted, setHasStarted] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -32,10 +33,24 @@ export default function Home() {
   // New user = no conversation history (will trigger welcome message)
   const [isNewUser, setIsNewUser] = useState(true);
 
-  // Check for existing session on mount
+  // Check auth status + existing session on mount
   useEffect(() => {
-    async function loadExistingSession() {
+    async function checkAuthAndLoadSession() {
       try {
+        // 1. Check if user has passed the passphrase gate
+        const authRes = await fetch("/api/auth/check");
+        const authData = await authRes.json();
+
+        if (!authData.authenticated) {
+          // Not authenticated — show passphrase gate
+          setIsAuthenticated(false);
+          setIsLoading(false);
+          return;
+        }
+
+        setIsAuthenticated(true);
+
+        // 2. If authenticated, check for existing conversation session
         const response = await fetch("/api/conversation");
         const data: ConversationData = await response.json();
 
@@ -58,8 +73,35 @@ export default function Home() {
       }
     }
 
-    loadExistingSession();
+    checkAuthAndLoadSession();
   }, []);
+
+  const handlePassphraseSubmit = async () => {
+    if (!passphrase.trim()) return;
+
+    setIsAuthLoading(true);
+    setPassphraseError("");
+
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ passphrase: passphrase.trim() }),
+      });
+
+      if (res.ok) {
+        setIsAuthenticated(true);
+        setPassphrase("");
+      } else {
+        const data = await res.json();
+        setPassphraseError(data.error || "Incorrect passphrase");
+      }
+    } catch {
+      setPassphraseError("Failed to connect to server");
+    } finally {
+      setIsAuthLoading(false);
+    }
+  };
 
   const handleStartChat = () => {
     if (userName.trim()) {
@@ -68,15 +110,18 @@ export default function Home() {
   };
 
   const handleRestart = async () => {
-    // Clear the userId cookie by calling an API that expires it
+    // Destroy the iron-session
     await fetch("/api/session", { method: "DELETE" });
 
-    // Reset all state
+    // Reset all state — back to passphrase gate
+    setIsAuthenticated(false);
     setUserName("");
     setHasStarted(false);
     setInitialMessages([]);
     setInitialConversationId(null);
-    setIsNewUser(true); // Reset to trigger welcome message for next user
+    setIsNewUser(true);
+    setPassphrase("");
+    setPassphraseError("");
   };
 
   // Show loading state while checking session
@@ -103,60 +148,104 @@ export default function Home() {
             AI Financial Advisor
           </h1>
           <p className="text-gray-600">
-            {hasStarted
-              ? "Let's discuss your financial situation"
-              : "Your personal financial consultation"
+            {!isAuthenticated
+              ? "Enter passphrase to access your consultation"
+              : hasStarted
+                ? "Let's discuss your financial situation"
+                : "Your personal financial consultation"
             }
           </p>
         </div>
 
-        {/* Welcome Card - Always visible */}
-        <Card className="max-w-md mx-auto">
-          <div className="space-y-5">
-            <div className="text-center mb-4">
-              <p className="text-black">
-                Welcome! I'll help you review your finances and set goals.
-              </p>
-            </div>
+        {/* ── Passphrase Gate ──────────────────────────────────────── */}
+        {!isAuthenticated && (
+          <Card className="max-w-md mx-auto">
+            <div className="space-y-5">
+              <div className="text-center mb-4">
+                <div className="text-4xl mb-3">🔐</div>
+                <p className="text-black">
+                  This application is access-restricted. Enter your passphrase to continue.
+                </p>
+              </div>
 
-            <Input
-              label="Your Name"
-              placeholder="Enter your name to begin..."
-              value={userName}
-              onChange={(e) => setUserName(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleStartChat()}
-              disabled={hasStarted}
-            />
+              <Input
+                label="Passphrase"
+                type="password"
+                placeholder="Enter passphrase..."
+                value={passphrase}
+                onChange={(e) => {
+                  setPassphrase(e.target.value);
+                  setPassphraseError("");
+                }}
+                onKeyDown={(e) => e.key === "Enter" && handlePassphraseSubmit()}
+              />
 
-            <button
-              onClick={handleStartChat}
-              disabled={!userName.trim() || hasStarted}
-              className="w-full py-3 px-6 rounded-xl font-semibold text-white bg-fuchsia-500 hover:bg-fuchsia-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-md shadow-fuchsia-500/20"
-            >
-              {hasStarted ? "Consultation Started" : "Start Consultation"}
-            </button>
+              {passphraseError && (
+                <p className="text-red-500 text-sm text-center">{passphraseError}</p>
+              )}
 
-            {hasStarted && (
               <button
-                onClick={handleRestart}
-                className="w-full py-2 px-4 rounded-xl font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 transition-all duration-200"
+                onClick={handlePassphraseSubmit}
+                disabled={!passphrase.trim() || isAuthLoading}
+                className="w-full py-3 px-6 rounded-xl font-semibold text-white bg-fuchsia-500 hover:bg-fuchsia-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-md shadow-fuchsia-500/20"
               >
-                Restart as a New User
+                {isAuthLoading ? "Verifying..." : "Unlock"}
               </button>
-            )}
-          </div>
-        </Card>
+            </div>
+          </Card>
+        )}
 
-        {/* Chat Interface - Shown after starting */}
-        {hasStarted && (
-          <div className="mt-6">
-            <VoiceChat
-              userName={userName}
-              initialMessages={initialMessages}
-              initialConversationId={initialConversationId}
-              isNewUser={isNewUser}
-            />
-          </div>
+        {/* ── Name Entry + Chat (shown after auth) ────────────────── */}
+        {isAuthenticated && (
+          <>
+            <Card className="max-w-md mx-auto">
+              <div className="space-y-5">
+                <div className="text-center mb-4">
+                  <p className="text-black">
+                    Welcome! I'll help you review your finances and set goals.
+                  </p>
+                </div>
+
+                <Input
+                  label="Your Name"
+                  placeholder="Enter your name to begin..."
+                  value={userName}
+                  onChange={(e) => setUserName(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleStartChat()}
+                  disabled={hasStarted}
+                />
+
+                <button
+                  onClick={handleStartChat}
+                  disabled={!userName.trim() || hasStarted}
+                  className="w-full py-3 px-6 rounded-xl font-semibold text-white bg-fuchsia-500 hover:bg-fuchsia-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-md shadow-fuchsia-500/20"
+                >
+                  {hasStarted ? "Consultation Started" : "Start Consultation"}
+                </button>
+
+                {hasStarted && (
+                  <button
+                    onClick={handleRestart}
+                    className="w-full py-2 px-4 rounded-xl font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 transition-all duration-200"
+                  >
+                    Restart as a New User
+                  </button>
+                )}
+              </div>
+            </Card>
+
+            {/* Chat Interface - Shown after starting */}
+            {hasStarted && (
+              <div className="mt-6">
+                <VoiceChat
+                  userName={userName}
+                  initialMessages={initialMessages}
+                  initialConversationId={initialConversationId}
+                  isNewUser={isNewUser}
+                />
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>

@@ -9,6 +9,7 @@ import { financeService } from "@/services/finance";
 import { speechService } from "@/services/speech/transcribe";
 import { userService } from "@/services/user";
 import { curateResourcesForGoal } from "@/services/resources";
+import { getSession } from "@/lib/session";
 
 const getCurrentDate = () => new Date().toISOString().split('T')[0];
 
@@ -86,21 +87,34 @@ const updateGoalSchema = z.object({
  * 
  * Streaming chat endpoint for live conversation with AI financial advisor.
  * Accepts text or audio input, returns streaming text response.
+ * 
+ * Identity is resolved from the iron-session cookie — never from the client.
  */
 export async function POST(request: NextRequest) {
     try {
+        // ── Session check ────────────────────────────────────────────
+        const session = await getSession();
+        if (!session.isAuthenticated) {
+            return new Response(JSON.stringify({ error: "Unauthorized" }), {
+                status: 401,
+                headers: { "Content-Type": "application/json" },
+            });
+        }
+
+        if (!session.userId || !session.userName) {
+            return new Response(JSON.stringify({ error: "No user in session. Please enter your name first." }), {
+                status: 400,
+                headers: { "Content-Type": "application/json" },
+            });
+        }
+
+        const userId = session.userId;
+
+        // ── Parse form data ──────────────────────────────────────────
         const formData = await request.formData();
         const textInput = formData.get("text") as string | null;
         const audioFile = formData.get("audio") as File | null;
-        const userName = formData.get("userId") as string;
         const conversationId = formData.get("conversationId") as string | null;
-
-        if (!userName?.trim()) {
-            return new Response(JSON.stringify({ error: "Please enter your name." }), {
-                status: 400,
-                headers: { "Content-Type": "application/json" }
-            });
-        }
 
         if (!textInput && !audioFile) {
             return new Response(JSON.stringify({ error: "Please provide text or audio input." }), {
@@ -109,10 +123,7 @@ export async function POST(request: NextRequest) {
             });
         }
 
-        // 1. Get or create user
-        const user = await userService.getOrCreateUser(userName);
-
-        // 2. Handle audio transcription if provided
+        // 1. Handle audio transcription if provided
         let userMessage = textInput || "";
         if (audioFile) {
             const arrayBuffer = await audioFile.arrayBuffer();
@@ -120,24 +131,24 @@ export async function POST(request: NextRequest) {
             userMessage = await speechService.transcribeAudio(buffer, audioFile.name);
         }
 
-        // 3. Get or create conversation
+        // 2. Get or create conversation
         let convoId = conversationId;
         if (!convoId) {
             const [newConvo] = await db.insert(conversations).values({
-                userId: user.id,
+                userId,
                 status: 'active',
             }).returning();
             convoId = newConvo.id;
         }
 
-        // 4. Save user message
+        // 3. Save user message
         await db.insert(messages).values({
             conversationId: convoId,
             role: 'user',
             content: userMessage,
         });
 
-        // 5. Load conversation history for context
+        // 4. Load conversation history for context
         const history = await db.select()
             .from(messages)
             .where(eq(messages.conversationId, convoId))
@@ -149,14 +160,14 @@ export async function POST(request: NextRequest) {
             content: m.content,
         }));
 
-        // 6. Fetch existing goals and financial data for context
-        const existingGoals = await financeService.getGoals(user.id);
+        // 5. Fetch existing goals and financial data for context
+        const existingGoals = await financeService.getGoals(userId);
         const goalsContext = existingGoals.length > 0
             ? "\n\nCurrent Goals:\n" + existingGoals.map(g => `- [${g.id}] ${g.title}: ${g.status}`).join("\n")
             : "";
 
         // Fetch existing assets/debts for deduplication context
-        const existingFinances = await financeService.getFinancialSummary(user.id);
+        const existingFinances = await financeService.getFinancialSummary(userId);
         const assetsContext = existingFinances.assets.length > 0
             ? "\n\nCurrent Assets:\n" + existingFinances.assets.map(a =>
                 `- [${a.type}] "${a.name}": $${a.value}`).join("\n")
@@ -183,7 +194,7 @@ export async function POST(request: NextRequest) {
     * If user says it's different: create a new record with a distinct name`;
 
         // Create tools with user context closure
-        const createTools = (userId: string) => ({
+        const createTools = (uid: string) => ({
             update_asset: tool({
                 description: "Record an asset (bank account, investment, retirement, etc.)",
                 inputSchema: updateAssetSchema,
@@ -192,12 +203,12 @@ export async function POST(request: NextRequest) {
 
                     // Handle name clarification - merge with existing account
                     if (isNameClarification && existingAccountName) {
-                        await financeService.mergeAsset(userId, existingAccountName, name, type, amount, date);
+                        await financeService.mergeAsset(uid, existingAccountName, name, type, amount, date);
                         return { success: true, message: `Updated ${existingAccountName} to ${name}: $${amount.toLocaleString()}` };
                     }
 
                     // Standard upsert (low confidence cases will still create - UI handles confirmation)
-                    await financeService.upsertAsset(userId, type, name, amount, date, "user_input", true);
+                    await financeService.upsertAsset(uid, type, name, amount, date, "user_input", true);
                     return { success: true, message: `Recorded ${name}: $${amount.toLocaleString()}` };
                 },
             }),
@@ -209,12 +220,12 @@ export async function POST(request: NextRequest) {
 
                     // Handle name clarification - merge with existing debt
                     if (isNameClarification && existingAccountName) {
-                        await financeService.mergeDebt(userId, existingAccountName, name, type, amount, date);
+                        await financeService.mergeDebt(uid, existingAccountName, name, type, amount, date);
                         return { success: true, message: `Updated ${existingAccountName} to ${name}: $${amount.toLocaleString()}` };
                     }
 
                     // Standard upsert
-                    await financeService.upsertDebt(userId, type, name, amount, date, "user_input", true);
+                    await financeService.upsertDebt(uid, type, name, amount, date, "user_input", true);
                     return { success: true, message: `Recorded ${name}: $${amount.toLocaleString()}` };
                 },
             }),
@@ -222,7 +233,7 @@ export async function POST(request: NextRequest) {
                 description: "Create a new financial or life goal",
                 inputSchema: createGoalSchema,
                 execute: async (data) => {
-                    const goalResult = await financeService.createGoal(userId, data);
+                    const goalResult = await financeService.createGoal(uid, data);
                     curateResourcesForGoal(goalResult.goalId, data.title)
                         .then(() => console.log(`[Curation] Completed for goal: ${data.title}`))
                         .catch(err => console.error(`[Curation] Failed for goal: ${data.title}`, err));
@@ -233,7 +244,7 @@ export async function POST(request: NextRequest) {
                 description: "Update an existing goal's progress or status",
                 inputSchema: updateGoalSchema,
                 execute: async (data) => {
-                    await financeService.updateGoal(userId, data.id, {
+                    await financeService.updateGoal(uid, data.id, {
                         currentAmount: data.currentAmount,
                         status: data.status,
                     });
@@ -242,12 +253,12 @@ export async function POST(request: NextRequest) {
             }),
         });
 
-        // 7. Stream response
+        // 6. Stream response
         const result = streamText({
             model: openai("gpt-4o"),
             system: SYSTEM_PROMPT + goalsContext + assetsContext + debtsContext + dedupInstructions,
             messages: messagesForLLM,
-            tools: createTools(user.id),
+            tools: createTools(userId),
             stopWhen: stepCountIs(10),
             onFinish: async ({ text }) => {
                 // Save assistant response
@@ -264,11 +275,7 @@ export async function POST(request: NextRequest) {
         // Return streaming response with conversation metadata
         const response = result.toTextStreamResponse();
 
-        // Set userId cookie for session (required for dashboard/goals pages)
-        const cookieValue = `userId=${user.id}; Path=/; Max-Age=${60 * 60 * 24 * 7}; HttpOnly; SameSite=Strict`;
-        response.headers.set("Set-Cookie", cookieValue);
-
-        // Add conversation ID and transcription to headers for client
+        // Add conversation ID to headers for client
         response.headers.set("X-Conversation-Id", convoId);
         if (audioFile) {
             response.headers.set("X-Transcription", encodeURIComponent(userMessage));

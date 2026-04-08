@@ -1,15 +1,15 @@
 import React from "react";
 import { financeService } from "@/services/finance";
 import { userService } from "@/services/user";
-import { cookies } from "next/headers";
 import Link from "next/link";
 import DashboardClient from "./DashboardClient";
+import { getSession } from "@/lib/session";
 
 export const dynamic = 'force-dynamic'; // Ensure we get fresh data on page load
 
 export default async function DashboardPage() {
-    const cookieStore = await cookies();
-    const userId = cookieStore.get("userId")?.value;
+    const session = await getSession();
+    const userId = session.isAuthenticated ? session.userId : undefined;
 
     if (!userId) {
         return (

@@ -1,19 +1,14 @@
 /**
- * TODO: AUTH_REFACTOR
- * 
- * Current Approach (MVP):
- * - Users are identified by name only (no password/authentication)
- * - getOrCreateUser() finds existing user by name or creates new one
- * - User ID stored in HTTP-only cookie for session persistence
- * - Anyone can access any user's data by entering their name
- * 
- * For Production Authentication:
- * 1. Integrate NextAuth.js or similar auth provider
- * 2. Replace getOrCreateUser() with auth provider's user creation
- * 3. Add email/OAuth for secure user identification
- * 4. Update all API routes to use auth session instead of userId cookie
- * 5. Add middleware to protect routes requiring authentication
- * 6. getUserById() will still be useful for fetching user details
+ * User Service
+ *
+ * Users are identified by name (entered after the passphrase gate).
+ * Identity is resolved server-side via iron-session (src/lib/session.ts).
+ * The getOrCreateUser() function is called during the init-conversation
+ * step, and the resulting userId is stored in the encrypted session cookie.
+ *
+ * For multi-user production:
+ * - Swap the passphrase gate for NextAuth.js with OAuth
+ * - The iron-session plumbing stays the same
  */
 import { db } from "@/db";
 import { users } from "@/db/schema";

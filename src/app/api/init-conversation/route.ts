@@ -3,15 +3,7 @@ import { db } from "@/db";
 import { conversations, messages, users } from "@/db/schema";
 import { userService } from "@/services/user";
 import { eq, desc } from "drizzle-orm";
-
-/**
- * TODO: AUTH_REFACTOR
- * This endpoint uses name-based user identification for MVP simplicity.
- * When migrating to proper authentication:
- * 1. Replace userName from request body with authenticated session user
- * 2. Add auth middleware to protect this endpoint
- * 3. Remove the Set-Cookie logic (session will be handled by auth provider)
- */
+import { getSession } from "@/lib/session";
 
 // Welcome message that the AI advisor leads with for new users
 const WELCOME_MESSAGE = `This consultation is for education and planning purposes only. I won't give tax or legal advice, though I may point out areas where you could benefit from talking with a CPA or attorney.
@@ -23,7 +15,11 @@ Let's begin with your current financial picture. Could you tell me about your as
 /**
  * POST /api/init-conversation
  * 
- * Initializes a conversation based on user status:
+ * Initializes a conversation based on user status.
+ * Also handles the name-entry step: accepts { userName } from the body,
+ * resolves/creates the DB user, and stores userId + userName in the
+ * iron-session so all subsequent API calls have identity.
+ * 
  * - NEW user (not in DB): Creates user, conversation, and welcome message
  * - RETURNING user (exists with conversation history): Returns existing conversation
  * - EXISTING user (no conversation history): Creates conversation with welcome message
@@ -33,6 +29,15 @@ Let's begin with your current financial picture. Could you tell me about your as
  */
 export async function POST(request: NextRequest) {
     try {
+        // ── Session check ────────────────────────────────────────────
+        const session = await getSession();
+        if (!session.isAuthenticated) {
+            return NextResponse.json(
+                { error: "Unauthorized" },
+                { status: 401 },
+            );
+        }
+
         const { userName } = await request.json();
 
         if (!userName?.trim()) {
@@ -44,7 +49,6 @@ export async function POST(request: NextRequest) {
 
         const trimmedName = userName.trim();
 
-        // TODO: AUTH_REFACTOR - Replace with authenticated session check
         // Check if user already exists in database
         const existingUser = await db
             .select()
@@ -53,7 +57,12 @@ export async function POST(request: NextRequest) {
             .limit(1);
 
         if (existingUser.length > 0) {
-            // User exists - check for existing conversation
+            // User exists — save identity to session
+            session.userId = existingUser[0].id;
+            session.userName = existingUser[0].name;
+            await session.save();
+
+            // Check for existing conversation
             const existingConvo = await db
                 .select()
                 .from(conversations)
@@ -69,7 +78,7 @@ export async function POST(request: NextRequest) {
                     .where(eq(messages.conversationId, existingConvo[0].id))
                     .orderBy(messages.createdAt);
 
-                const response = NextResponse.json({
+                return NextResponse.json({
                     isNewUser: false,
                     conversationId: existingConvo[0].id,
                     messages: existingMessages.map(m => ({
@@ -78,21 +87,16 @@ export async function POST(request: NextRequest) {
                         content: m.content,
                     })),
                 });
-
-                // Set cookie for session
-                response.cookies.set("userId", existingUser[0].id, {
-                    path: "/",
-                    maxAge: 60 * 60 * 24 * 7,
-                    httpOnly: true,
-                    sameSite: "strict",
-                });
-
-                return response;
             }
         }
 
         // New user OR existing user without conversation - create welcome message
         const user = await userService.getOrCreateUser(trimmedName);
+
+        // Save identity to session
+        session.userId = user.id;
+        session.userName = user.name;
+        await session.save();
 
         const [newConversation] = await db
             .insert(conversations)
@@ -111,7 +115,7 @@ export async function POST(request: NextRequest) {
             })
             .returning();
 
-        const response = NextResponse.json({
+        return NextResponse.json({
             isNewUser: true,
             conversationId: newConversation.id,
             messages: [{
@@ -120,16 +124,6 @@ export async function POST(request: NextRequest) {
                 content: welcomeMsg.content,
             }],
         });
-
-        // TODO: AUTH_REFACTOR - Remove this cookie logic; auth provider will handle sessions
-        response.cookies.set("userId", user.id, {
-            path: "/",
-            maxAge: 60 * 60 * 24 * 7,
-            httpOnly: true,
-            sameSite: "strict",
-        });
-
-        return response;
     } catch (error) {
         console.error("Error initializing conversation:", error);
         return NextResponse.json(
@@ -138,4 +132,3 @@ export async function POST(request: NextRequest) {
         );
     }
 }
-

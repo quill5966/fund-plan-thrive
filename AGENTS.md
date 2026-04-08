@@ -149,22 +149,26 @@ Two-LLM pipeline for curating goal step resources.
 | `/api/conversation` | GET | Load existing session + conversation history |
 | `/api/init-conversation` | POST | Initialize conversation for new/returning users |
 | `/api/goals` | GET | Fetch all goals for current user |
-| `/api/session` | DELETE | Clear user session cookie |
+| `/api/session` | DELETE | Clear iron-session (logout) |
+| `/api/auth/login` | POST | Validate passphrase, create authenticated session |
+| `/api/auth/check` | GET | Return current authentication status |
 
 ---
 
 ## Key Patterns
 
 ### Session Management
-- User ID stored in HTTP-only cookie (`userId`)
-- Session checked on page load via `/api/conversation`
-- No auth library currently (simplified for prototype)
+- Passphrase gate on first visit — validates against `APP_PASSPHRASE` env var
+- Session managed by `iron-session` (signed + encrypted cookies)
+- Session config centralized in `src/lib/session.ts`
+- All API routes and server pages read `userId` from session — never from the client
+- Session contains: `isAuthenticated`, `userId`, `userName`
+- `userId` is set during the `/api/init-conversation` step after name entry
 
 ### Data Flow: Audio to Response
 ```
-VoiceChat (record) → /api/process-audio → speechService.transcribe 
-    → advisorService.processTranscription → LLM with tools 
-    → financeService (tool execution) → response → UI
+VoiceChat (record) → /api/chat (session check) → speechService.transcribe 
+    → LLM with tools → financeService (tool execution) → response → UI
 ```
 
 ### Historical Data Tracking
@@ -182,7 +186,7 @@ VoiceChat (record) → /api/process-audio → speechService.transcribe
 - VoiceChat calls `/api/init-conversation` which checks if user exists in DB:
   - **New user**: Creates conversation + AI welcome message
   - **Returning user**: Returns existing conversation history
-- Files have `// TODO: AUTH_REFACTOR` comments for future auth migration
+- The init-conversation step also stores `userId` and `userName` in the iron-session
 
 ---
 
@@ -192,6 +196,8 @@ VoiceChat (record) → /api/process-audio → speechService.transcribe
 OPENAI_API_KEY=       # Required - GPT-4o, Whisper
 BRAVE_API_KEY=        # Required - Resource curation search
 DATABASE_URL=         # PostgreSQL connection string
+APP_PASSPHRASE=       # Required - Passphrase to unlock the app
+SESSION_PASSWORD=     # Required - 32+ char static key for iron-session encryption
 ```
 
 ---
@@ -220,7 +226,7 @@ DATABASE_URL=         # PostgreSQL connection string
 
 ## Gotchas & Notes
 
-1. **No formal auth** - Uses simple cookie-based user ID; no login/signup
+1. **Passphrase-gated access** - Uses iron-session with APP_PASSPHRASE; swap for NextAuth.js OAuth for multi-user
 2. **Brave API rate limit** - Free tier is 1 req/sec; resource curation runs sequentially
 3. **Audio stored locally** - `/storage` folder, git-ignored
 4. **Forward-fill charts** - Dashboard densifies sparse historical data to monthly intervals

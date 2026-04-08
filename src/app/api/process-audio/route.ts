@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { speechService } from "@/services/speech/transcribe";
 import { storageService } from "@/services/speech/storage";
-import { userService } from "@/services/user";
 import { advisorService } from "@/services/advisor";
+import { getSession } from "@/lib/session";
 
 /**
  * POST /api/process-audio
@@ -11,13 +11,25 @@ import { advisorService } from "@/services/advisor";
  * processes it through the AI Advisor to extract financial data,
  * and returns the results.
  * 
+ * Identity is resolved from the iron-session cookie — never from the client.
+ * 
  * Supported formats: mp3, mp4, mpeg, mpga, m4a, wav, webm
  */
 export async function POST(request: NextRequest) {
     try {
+        // ── Session check ────────────────────────────────────────────
+        const session = await getSession();
+        if (!session.isAuthenticated || !session.userId) {
+            return NextResponse.json(
+                { error: "Unauthorized" },
+                { status: 401 },
+            );
+        }
+
+        const userId = session.userId;
+
         const formData = await request.formData();
         const audioFile = formData.get("audio") as File | null;
-        const userName = formData.get("userId") as string;
 
         if (!audioFile) {
             return NextResponse.json(
@@ -26,59 +38,38 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        if (!userName || !userName.trim()) {
-            return NextResponse.json(
-                { error: "Please enter your name." },
-                { status: 400 }
-            );
-        }
-
-        // 1. Get or create user in the database
-        const user = await userService.getOrCreateUser(userName);
-
-        // 2. Convert File to Buffer for processing
+        // 1. Convert File to Buffer for processing
         const arrayBuffer = await audioFile.arrayBuffer();
         const buffer = Buffer.from(arrayBuffer);
 
-        // 3. Transcribe the audio
+        // 2. Transcribe the audio
         const transcribedText = await speechService.transcribeAudio(
             buffer,
             audioFile.name
         );
 
-        // 4. Log transcription to storage AND create conversation record
+        // 3. Log transcription to storage AND create conversation record
         const logEntry = await storageService.logTranscription({
-            userId: user.id,
+            userId,
             fileName: audioFile.name,
             fileSize: audioFile.size,
             transcribedText,
         });
 
-        // 5. Process transcription through AI Advisor to extract and update financial data
-        const advisorResult = await advisorService.processTranscription(user.id, transcribedText);
+        // 4. Process transcription through AI Advisor to extract and update financial data
+        const advisorResult = await advisorService.processTranscription(userId, transcribedText);
 
-        const response = NextResponse.json({
+        return NextResponse.json({
             success: true,
             transcription: transcribedText,
             logId: logEntry.id,
-            userId: user.id,
+            userId,
             advisor: {
                 actionsPerformed: advisorResult.actionsPerformed,
                 llmResponse: advisorResult.llmResponse,
                 pendingConfirmation: advisorResult.pendingConfirmation,
             },
         });
-
-        // Set session cookie
-        response.cookies.set("userId", user.id, {
-            httpOnly: true,
-            path: "/",
-            maxAge: 60 * 60 * 24 * 7, // 1 week
-            secure: process.env.NODE_ENV === "production", // Best practice
-            sameSite: "strict",
-        });
-
-        return response;
     } catch (error) {
         console.error("Error processing audio:", error);
         return NextResponse.json(

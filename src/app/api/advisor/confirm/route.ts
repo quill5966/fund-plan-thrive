@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { financeService } from "@/services/finance";
+import { getSession } from "@/lib/session";
 
 /**
  * POST /api/advisor/confirm
@@ -8,22 +9,34 @@ import { financeService } from "@/services/finance";
  * asset/debt identification. The user can either:
  * - Merge with an existing account (choice: "merge")
  * - Create as a new account (choice: "new")
+ * 
+ * Identity is resolved from the iron-session cookie — never from the client.
  */
 export async function POST(request: NextRequest) {
     try {
+        // ── Session check ────────────────────────────────────────────
+        const session = await getSession();
+        if (!session.isAuthenticated || !session.userId) {
+            return NextResponse.json(
+                { error: "Unauthorized" },
+                { status: 401 },
+            );
+        }
+
+        const userId = session.userId;
+
         const body = await request.json();
         const {
-            userId,
             confirmationType,  // "asset" | "debt"
             choice,            // "merge" | "new"
             existingAccountName,  // Required if choice === "merge"
             pendingAction      // { type, name, amount, effectiveDate }
         } = body;
 
-        // Validate required fields
-        if (!userId || !confirmationType || !choice || !pendingAction) {
+        // Validate required fields (userId no longer needed from body)
+        if (!confirmationType || !choice || !pendingAction) {
             return NextResponse.json(
-                { error: "Missing required fields: userId, confirmationType, choice, pendingAction" },
+                { error: "Missing required fields: confirmationType, choice, pendingAction" },
                 { status: 400 }
             );
         }
@@ -74,7 +87,7 @@ export async function POST(request: NextRequest) {
     } catch (error) {
         console.error("Error in /api/advisor/confirm:", error);
         return NextResponse.json(
-            { error: error instanceof Error ? error.message : "Failed to process confirmation" },
+            { error: "Failed to process confirmation" },
             { status: 500 }
         );
     }

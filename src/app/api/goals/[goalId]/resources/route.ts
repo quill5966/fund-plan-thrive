@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { goals, goalSteps, goalResources } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { cookies } from "next/headers";
+import { getSession } from "@/lib/session";
 
 interface Resource {
     id: string;
@@ -19,6 +19,7 @@ interface ResourcesByStep {
  * 
  * Returns resources for a specific goal, grouped by step ID.
  * Used for polling to check for newly curated resources.
+ * Identity is resolved from the iron-session cookie.
  */
 export async function GET(
     request: NextRequest,
@@ -26,8 +27,8 @@ export async function GET(
 ) {
     try {
         const { goalId } = await params;
-        const cookieStore = await cookies();
-        const userId = cookieStore.get("userId")?.value;
+        const session = await getSession();
+        const userId = session.isAuthenticated ? session.userId : undefined;
 
         if (!userId) {
             return NextResponse.json(

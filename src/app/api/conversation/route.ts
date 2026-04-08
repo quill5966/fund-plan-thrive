@@ -1,27 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
-import { cookies } from "next/headers";
 import { db } from "@/db";
 import { conversations, messages, users } from "@/db/schema";
 import { eq, desc } from "drizzle-orm";
+import { getSession } from "@/lib/session";
 
 /**
  * GET /api/conversation
  * 
  * Fetches the most recent active conversation for the current user.
  * Returns conversation metadata and message history.
- * Requires userId cookie to be set.
+ * Identity is resolved from the iron-session cookie.
  */
 export async function GET(request: NextRequest) {
     try {
-        const cookieStore = await cookies();
-        const userId = cookieStore.get("userId")?.value;
+        const session = await getSession();
 
-        if (!userId) {
+        if (!session.isAuthenticated || !session.userId) {
             return NextResponse.json({
                 hasSession: false,
                 message: "No active session"
             }, { status: 200 });
         }
+
+        const userId = session.userId;
 
         // Verify user exists
         const user = await db

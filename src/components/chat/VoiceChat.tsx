@@ -12,12 +12,6 @@ interface Message {
     content: string;
 }
 
-/**
- * TODO: AUTH_REFACTOR
- * - isNewUser prop currently based on conversation history
- * - With proper auth, this could be based on user account creation timestamp
- * - userName would come from auth session instead of being passed as prop
- */
 interface VoiceChatProps {
     userName: string;
     onDataExtracted?: () => void;
@@ -116,7 +110,6 @@ export function VoiceChat({ userName, onDataExtracted, initialMessages = [], ini
 
         try {
             const formData = new FormData();
-            formData.append("userId", userName);
 
             if (text) {
                 formData.append("text", text);
