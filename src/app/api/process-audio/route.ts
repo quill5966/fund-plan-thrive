@@ -3,6 +3,7 @@ import { speechService } from "@/services/speech/transcribe";
 import { storageService } from "@/services/speech/storage";
 import { advisorService } from "@/services/advisor";
 import { getSession } from "@/lib/session";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 /**
  * POST /api/process-audio
@@ -27,6 +28,18 @@ export async function POST(request: NextRequest) {
         }
 
         const userId = session.userId;
+
+        // ── Rate Limit (10 req/min for Audio) ────────────────────────
+        const rateLimit = checkRateLimit(`audio:${userId}`, 10, 60 * 1000);
+        if (!rateLimit.success) {
+            return NextResponse.json(
+                { error: "Too many requests. Please wait a moment before trying again." },
+                { 
+                    status: 429,
+                    headers: { "Retry-After": Math.ceil(rateLimit.resetMs / 1000).toString() }
+                }
+            );
+        }
 
         const formData = await request.formData();
         const audioFile = formData.get("audio") as File | null;

@@ -11,6 +11,7 @@ import { userService } from "@/services/user";
 import { curateResourcesForGoal } from "@/services/resources";
 import { getSession } from "@/lib/session";
 import { validateInputLength, validateToolParams } from "@/lib/validation";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 const getCurrentDate = () => new Date().toISOString().split('T')[0];
 
@@ -115,6 +116,20 @@ export async function POST(request: NextRequest) {
         }
 
         const userId = session.userId;
+
+        // ── Rate Limit (15 req/min for Chat) ─────────────────────────
+        const rateLimit = checkRateLimit(`chat:${userId}`, 15, 60 * 1000);
+        if (!rateLimit.success) {
+            return new Response(JSON.stringify({ 
+                error: "Too many requests. Please wait a moment before trying again." 
+            }), {
+                status: 429,
+                headers: { 
+                    "Content-Type": "application/json",
+                    "Retry-After": Math.ceil(rateLimit.resetMs / 1000).toString()
+                },
+            });
+        }
 
         // ── Parse form data ──────────────────────────────────────────
         const formData = await request.formData();

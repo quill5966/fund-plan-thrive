@@ -4,6 +4,7 @@ import { conversations, messages, users } from "@/db/schema";
 import { userService } from "@/services/user";
 import { eq, desc } from "drizzle-orm";
 import { getSession } from "@/lib/session";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 // Welcome message that the AI advisor leads with for new users
 const WELCOME_MESSAGE = `This consultation is for education and planning purposes only. I won't give tax or legal advice, though I may point out areas where you could benefit from talking with a CPA or attorney.
@@ -35,6 +36,19 @@ export async function POST(request: NextRequest) {
             return NextResponse.json(
                 { error: "Unauthorized" },
                 { status: 401 },
+            );
+        }
+
+        // ── Rate Limit (5 req/min for Init Conversation) ─────────────
+        const clientIp = request.headers.get("x-forwarded-for") || "unknown";
+        const rateLimit = checkRateLimit(`init:${clientIp}`, 5, 60 * 1000);
+        if (!rateLimit.success) {
+            return NextResponse.json(
+                { error: "Too many requests. Please wait a moment before trying again." },
+                { 
+                    status: 429,
+                    headers: { "Retry-After": Math.ceil(rateLimit.resetMs / 1000).toString() }
+                }
             );
         }
 
