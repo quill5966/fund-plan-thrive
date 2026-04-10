@@ -21,7 +21,8 @@ export function Input({
             {label && (
                 <label
                     htmlFor={inputId}
-                    className="text-sm font-medium text-black"
+                    className="text-sm font-medium"
+                    style={{ color: "var(--text-sec)" }}
                 >
                     {label}
                 </label>
@@ -29,19 +30,19 @@ export function Input({
             <input
                 id={inputId}
                 className={`
-          w-full px-4 py-3 rounded-xl
-          bg-white/50 dark:bg-white/5
-          border border-gray-200 dark:border-white/10
-          text-black
-          placeholder:text-gray-500
-          focus:outline-none focus:ring-2 focus:ring-fuchsia-500/50 focus:border-fuchsia-500
-          transition-all duration-200
-          ${error ? "border-red-500 focus:ring-red-500/50" : ""}
-          ${className}
-        `}
+                    w-full px-4 py-3 rounded-xl
+                    transition-all duration-200
+                    outline-none
+                    ${className}
+                `}
+                style={{
+                    background: "var(--bg-surface)",
+                    border: `1px solid ${error ? "var(--red)" : "var(--border)"}`,
+                    color: "var(--text)",
+                }}
                 {...props}
             />
-            {error && <p className="text-sm text-red-500">{error}</p>}
+            {error && <p className="text-sm" style={{ color: "var(--red)" }}>{error}</p>}
         </div>
     );
 }

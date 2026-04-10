@@ -6,22 +6,24 @@ interface CardProps {
     title?: string;
     children: React.ReactNode;
     className?: string;
+    variant?: "default" | "surface" | "transparent";
 }
 
-export function Card({ title, children, className = "" }: CardProps) {
+export function Card({ title, children, className = "", variant = "default" }: CardProps) {
+    const variantStyles: Record<string, React.CSSProperties> = {
+        default: { background: "var(--bg-card)", border: "1px solid var(--border)" },
+        surface: { background: "var(--bg-surface)", border: "1px solid var(--border)" },
+        transparent: { background: "transparent", border: "1px solid transparent" },
+    };
+
     return (
         <div
-            className={`
-        bg-white
-        border border-gray-100
-        rounded-xl
-        shadow-sm shadow-gray-900/5
-        ${className}
-      `}
+            className={`rounded-xl shadow-sm ${className}`}
+            style={variantStyles[variant]}
         >
             {title && (
-                <div className="px-6 py-4 border-b border-gray-100 dark:border-white/10">
-                    <h2 className="text-lg font-semibold text-gray-800 dark:text-white">
+                <div style={{ padding: "16px 24px", borderBottom: "1px solid var(--border)" }}>
+                    <h2 className="text-lg font-semibold" style={{ color: "var(--text)" }}>
                         {title}
                     </h2>
                 </div>

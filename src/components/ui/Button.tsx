@@ -3,33 +3,54 @@
 import React from "react";
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-    variant?: "primary" | "secondary";
+    variant?: "primary" | "secondary" | "gradient" | "ghost";
+    size?: "sm" | "md" | "lg";
     loading?: boolean;
     children: React.ReactNode;
 }
 
 export function Button({
     variant = "primary",
+    size = "md",
     loading = false,
     disabled,
     children,
     className = "",
+    style,
     ...props
 }: ButtonProps) {
+    const sizes = {
+        sm: "px-3 py-1.5 text-xs rounded-lg",
+        md: "px-6 py-3 text-sm rounded-lg",
+        lg: "px-8 py-3.5 text-base rounded-xl",
+    };
+
     const baseStyles =
-        "inline-flex items-center justify-center gap-2 px-6 py-3 rounded-lg font-semibold text-sm transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed";
+        "inline-flex items-center justify-center gap-2 font-semibold transition-all duration-200 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed";
 
     const variants = {
         primary:
-            "bg-fuchsia-500 text-white hover:bg-fuchsia-600 focus:ring-fuchsia-400 shadow-md shadow-fuchsia-500/20",
+            "text-white hover:brightness-110 shadow-md",
         secondary:
-            "bg-gray-800 text-white hover:bg-gray-700 focus:ring-gray-500",
+            "hover:brightness-110",
+        gradient:
+            "text-white hover:brightness-110 shadow-md",
+        ghost:
+            "hover:brightness-110",
+    };
+
+    const variantStyles: Record<string, React.CSSProperties> = {
+        primary: { background: "var(--accent)" },
+        secondary: { background: "var(--bg-surface)", color: "var(--text)" },
+        gradient: { background: "linear-gradient(135deg, var(--accent), #8b5cf6)" },
+        ghost: { background: "transparent", color: "var(--text-sec)", border: "1px solid var(--border)" },
     };
 
     return (
         <button
-            className={`${baseStyles} ${variants[variant]} ${className}`}
+            className={`${baseStyles} ${sizes[size]} ${variants[variant]} ${className}`}
             disabled={disabled || loading}
+            style={{ ...variantStyles[variant], ...style }}
             {...props}
         >
             {loading && (

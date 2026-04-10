@@ -3,7 +3,6 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useVoiceRecorder } from "@/hooks/useVoiceRecorder";
-import { Button } from "@/components/ui";
 import { Mic, Send, Square } from "lucide-react";
 
 interface Message {
@@ -50,6 +49,7 @@ export function VoiceChat({ userName, onDataExtracted, initialMessages = [], ini
             sendMessage(undefined, audioBlob);
             clearRecording();
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [audioBlob]);
 
     // Initialize conversation with welcome message for new users
@@ -91,8 +91,6 @@ export function VoiceChat({ userName, onDataExtracted, initialMessages = [], ini
     }, [isNewUser, userName, initialMessages.length, conversationId]);
 
     const sendMessage = useCallback(async (text?: string, audio?: Blob) => {
-        const messageContent = text || "";
-
         if (!text && !audio) return;
 
         setIsLoading(true);
@@ -209,15 +207,26 @@ export function VoiceChat({ userName, onDataExtracted, initialMessages = [], ini
     };
 
     return (
-        <div className="flex flex-col h-[600px] bg-white dark:bg-gray-900 rounded-2xl shadow-xl overflow-hidden border border-gray-200 dark:border-gray-800">
+        <div
+            className="flex flex-col h-full overflow-hidden"
+            style={{
+                background: "var(--bg-card)",
+                borderLeft: "1px solid var(--border)",
+                borderRight: "1px solid var(--border)",
+            }}
+        >
             {/* Messages area */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
                 {messages.length === 0 && !streamingContent && (
-                    <div className="flex items-center justify-center h-full text-gray-500 dark:text-gray-400">
+                    <div className="flex items-center justify-center h-full">
                         <div className="text-center">
                             <div className="text-4xl mb-3">💬</div>
-                            <p className="text-lg font-medium">Start your financial consultation</p>
-                            <p className="text-sm mt-1">Type a message or click the mic to speak</p>
+                            <p className="text-lg font-medium" style={{ color: "var(--text-sec)" }}>
+                                Start your financial consultation
+                            </p>
+                            <p className="text-sm mt-1" style={{ color: "var(--text-ter)" }}>
+                                Type a message or click the mic to speak
+                            </p>
                         </div>
                     </div>
                 )}
@@ -228,12 +237,16 @@ export function VoiceChat({ userName, onDataExtracted, initialMessages = [], ini
                         className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
                     >
                         <div
-                            className={`max-w-[80%] px-4 py-3 rounded-2xl ${message.role === "user"
-                                ? "bg-fuchsia-500 text-white rounded-br-md"
-                                : "bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white rounded-bl-md"
-                                }`}
+                            className="max-w-[80%] px-4 py-3 rounded-2xl"
+                            style={{
+                                background: message.role === "user" ? "var(--accent)" : "var(--bg-surface)",
+                                color: message.role === "user" ? "#fff" : "var(--text)",
+                                border: message.role === "user" ? "none" : "1px solid var(--border)",
+                                borderBottomRightRadius: message.role === "user" ? 6 : undefined,
+                                borderBottomLeftRadius: message.role === "assistant" ? 6 : undefined,
+                            }}
                         >
-                            <p className="whitespace-pre-wrap text-sm">{message.content}</p>
+                            <p className="whitespace-pre-wrap text-sm leading-relaxed">{message.content}</p>
                         </div>
                     </div>
                 ))}
@@ -241,9 +254,20 @@ export function VoiceChat({ userName, onDataExtracted, initialMessages = [], ini
                 {/* Streaming response */}
                 {streamingContent && (
                     <div className="flex justify-start">
-                        <div className="max-w-[80%] px-4 py-3 rounded-2xl bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white rounded-bl-md">
-                            <p className="whitespace-pre-wrap text-sm">{streamingContent}</p>
-                            <span className="inline-block w-2 h-4 bg-fuchsia-500 animate-pulse ml-1" />
+                        <div
+                            className="max-w-[80%] px-4 py-3 rounded-2xl"
+                            style={{
+                                background: "var(--bg-surface)",
+                                color: "var(--text)",
+                                border: "1px solid var(--border)",
+                                borderBottomLeftRadius: 6,
+                            }}
+                        >
+                            <p className="whitespace-pre-wrap text-sm leading-relaxed">{streamingContent}</p>
+                            <span
+                                className="inline-block w-0.5 h-4 animate-pulse ml-1"
+                                style={{ background: "var(--accent)" }}
+                            />
                         </div>
                     </div>
                 )}
@@ -251,11 +275,17 @@ export function VoiceChat({ userName, onDataExtracted, initialMessages = [], ini
                 {/* Loading indicator */}
                 {isLoading && !streamingContent && (
                     <div className="flex justify-start">
-                        <div className="px-4 py-3 rounded-2xl bg-gray-100 dark:bg-gray-800 rounded-bl-md">
+                        <div
+                            className="px-4 py-3 rounded-2xl"
+                            style={{
+                                background: "var(--bg-surface)",
+                                borderBottomLeftRadius: 6,
+                            }}
+                        >
                             <div className="flex space-x-2">
-                                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
-                                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
-                                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+                                <div className="w-2 h-2 rounded-full animate-bounce" style={{ background: "var(--text-ter)", animationDelay: "0ms" }} />
+                                <div className="w-2 h-2 rounded-full animate-bounce" style={{ background: "var(--text-ter)", animationDelay: "150ms" }} />
+                                <div className="w-2 h-2 rounded-full animate-bounce" style={{ background: "var(--text-ter)", animationDelay: "300ms" }} />
                             </div>
                         </div>
                     </div>
@@ -266,13 +296,13 @@ export function VoiceChat({ userName, onDataExtracted, initialMessages = [], ini
 
             {/* Voice error display */}
             {voiceError && (
-                <div className="px-4 py-2 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm">
+                <div className="px-4 py-2 text-sm" style={{ background: "rgba(248,113,113,0.1)", color: "var(--red)" }}>
                     {voiceError}
                 </div>
             )}
 
             {/* Input area */}
-            <div className="border-t border-gray-200 dark:border-gray-800 p-4">
+            <div style={{ borderTop: "1px solid var(--border)", padding: 16 }}>
                 <form onSubmit={handleSubmit} className="flex items-center gap-3">
                     {/* Text input */}
                     <input
@@ -281,7 +311,11 @@ export function VoiceChat({ userName, onDataExtracted, initialMessages = [], ini
                         onChange={(e) => setInputText(e.target.value)}
                         placeholder="Type your message..."
                         disabled={isLoading || isRecording}
-                        className="flex-1 px-4 py-3 rounded-xl bg-gray-100 dark:bg-gray-800 border-0 text-gray-900 dark:text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-fuchsia-500"
+                        className="flex-1 px-4 py-3 rounded-xl border-none outline-none"
+                        style={{
+                            background: "var(--bg-surface)",
+                            color: "var(--text)",
+                        }}
                     />
 
                     {/* Voice button - Click to toggle recording */}
@@ -290,10 +324,11 @@ export function VoiceChat({ userName, onDataExtracted, initialMessages = [], ini
                             type="button"
                             onClick={handleMicClick}
                             disabled={isLoading}
-                            className={`p-3 rounded-xl transition-all duration-200 ${isRecording
-                                ? "bg-red-500 text-white animate-pulse"
-                                : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
-                                } disabled:opacity-50`}
+                            className="p-3 rounded-xl transition-all duration-200 disabled:opacity-50 border-none cursor-pointer"
+                            style={{
+                                background: isRecording ? "var(--red)" : "var(--bg-surface)",
+                                color: isRecording ? "#fff" : "var(--text-sec)",
+                            }}
                             title={isRecording ? "Click to stop & send" : "Click to record"}
                         >
                             {isRecording ? <Square className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
@@ -301,18 +336,21 @@ export function VoiceChat({ userName, onDataExtracted, initialMessages = [], ini
                     )}
 
                     {/* Send button */}
-                    <Button
+                    <button
                         type="submit"
-                        variant="primary"
                         disabled={!inputText.trim() || isLoading}
-                        className="!p-3 !rounded-xl"
+                        className="p-3 rounded-xl transition-all duration-200 disabled:opacity-50 border-none cursor-pointer"
+                        style={{
+                            background: "var(--accent)",
+                            color: "#fff",
+                        }}
                     >
                         <Send className="w-5 h-5" />
-                    </Button>
+                    </button>
                 </form>
 
                 {isRecording && (
-                    <p className="text-center text-sm text-red-500 mt-2 animate-pulse">
+                    <p className="text-center text-sm mt-2 animate-pulse" style={{ color: "var(--red)" }}>
                         🎤 Recording... Release to send
                     </p>
                 )}

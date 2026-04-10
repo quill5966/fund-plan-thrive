@@ -1,42 +1,36 @@
 import type { Metadata } from "next";
-import { Inter, Geist_Mono } from "next/font/google";
-import Sidebar from "@/components/Sidebar";
+import { DM_Sans, JetBrains_Mono } from "next/font/google";
+import ClientLayout from "@/components/ClientLayout";
 import "./globals.css";
 
-const inter = Inter({
-  variable: "--font-inter",
-  subsets: ["latin"],
-  display: "swap",
+const dmSans = DM_Sans({
+    variable: "--font-dm-sans",
+    subsets: ["latin"],
+    display: "swap",
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
+const jetbrainsMono = JetBrains_Mono({
+    variable: "--font-jetbrains-mono",
+    subsets: ["latin"],
 });
 
 export const metadata: Metadata = {
-  title: "Financial Advisor AI",
-  description: "Your AI-powered personal finance dashboard",
+    title: "Fund Plan Thrive — AI Financial Advisor",
+    description: "Your AI-powered personal finance dashboard and advisor",
 };
 
 export default function RootLayout({
-  children,
+    children,
 }: Readonly<{
-  children: React.ReactNode;
+    children: React.ReactNode;
 }>) {
-  return (
-    <html lang="en">
-      <body
-        className={`${inter.variable} ${geistMono.variable} antialiased bg-[#E8EAED] text-gray-900`}
-      >
-        <div className="flex min-h-screen">
-          <Sidebar />
-          <main className="flex-1 overflow-auto">
-            {children}
-          </main>
-        </div>
-      </body>
-    </html>
-  );
+    return (
+        <html lang="en">
+            <body
+                className={`${dmSans.variable} ${jetbrainsMono.variable} antialiased bg-[#E8EAED] text-gray-900`}
+            >
+                <ClientLayout>{children}</ClientLayout>
+            </body>
+        </html>
+    );
 }
-
