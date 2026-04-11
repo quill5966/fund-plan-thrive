@@ -10,7 +10,7 @@ import { speechService } from "@/services/speech/transcribe";
 import { userService } from "@/services/user";
 import { curateResourcesForGoal } from "@/services/resources";
 import { getSession } from "@/lib/session";
-import { validateInputLength, validateToolParams } from "@/lib/validation";
+import { validateInputLength, validateToolParams, validateSteps } from "@/lib/validation";
 import { checkRateLimit } from "@/lib/rate-limit";
 
 const getCurrentDate = () => new Date().toISOString().split('T')[0];
@@ -274,6 +274,9 @@ export async function POST(request: NextRequest) {
                 description: "Create a new financial or life goal",
                 inputSchema: createGoalSchema,
                 execute: async (data) => {
+                    const stepsCheck = validateSteps(data.steps);
+                    if (!stepsCheck.valid) return { success: false, message: stepsCheck.error };
+
                     const goalResult = await financeService.createGoal(uid, data);
                     curateResourcesForGoal(goalResult.goalId, data.title)
                         .then(() => console.log(`[Curation] Completed for goal: ${data.title}`))

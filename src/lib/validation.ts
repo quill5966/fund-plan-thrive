@@ -14,6 +14,15 @@ const DATE_RANGE_YEARS = 30;
 // Allow letters, numbers, spaces, and common punctuation in account names
 const NAME_PATTERN = /^[\p{L}\p{N}\s\-'.,()&/#+]+$/u;
 
+const MIN_STEP_LENGTH = 10;
+const MAX_STEP_LENGTH = 300;
+// Allow full natural-language punctuation in step descriptions
+const STEP_PATTERN = /^[\p{L}\p{N}\s\-'.,!?;:()&"#%$@+/\\*]+$/u;
+// Detect ≥8 consecutive identical characters (LLM artifacts / garbage)
+const REPEATED_CHAR_PATTERN = /(.)\1{7,}/;
+// Detect HTML tags and javascript: URIs
+const HTML_PATTERN = /<[a-zA-Z/!][^>]*>|javascript:/i;
+
 export interface ValidationResult {
     valid: boolean;
     error?: string;
@@ -77,6 +86,47 @@ export function validateEffectiveDate(dateStr: string): ValidationResult {
 
     if (date < minDate || date > maxDate) {
         return { valid: false, error: `Date "${dateStr}" is outside the allowed range (±${DATE_RANGE_YEARS} years from today).` };
+    }
+    return { valid: true };
+}
+
+/**
+ * Validates a single goal step description.
+ * Rejects steps that are too short/long, contain control characters,
+ * repeated-char artifacts, or HTML/script injection patterns.
+ */
+export function validateStep(description: string): ValidationResult {
+    const trimmed = description.trim();
+
+    if (trimmed.length < MIN_STEP_LENGTH) {
+        return { valid: false, error: `Step description too short (${trimmed.length} chars). Minimum is ${MIN_STEP_LENGTH}.` };
+    }
+    if (trimmed.length > MAX_STEP_LENGTH) {
+        return { valid: false, error: `Step description too long (${trimmed.length} chars). Maximum is ${MAX_STEP_LENGTH}.` };
+    }
+    if (HTML_PATTERN.test(trimmed)) {
+        return { valid: false, error: `Step description contains invalid content (HTML or script).` };
+    }
+    if (REPEATED_CHAR_PATTERN.test(trimmed)) {
+        return { valid: false, error: `Step description contains invalid repeated characters.` };
+    }
+    if (!STEP_PATTERN.test(trimmed)) {
+        return { valid: false, error: `Step description contains invalid characters.` };
+    }
+
+    return { valid: true };
+}
+
+/**
+ * Validates an array of goal step descriptions.
+ * Returns the first error found with its index, or { valid: true }.
+ */
+export function validateSteps(steps: { description: string }[]): ValidationResult {
+    for (let i = 0; i < steps.length; i++) {
+        const result = validateStep(steps[i].description);
+        if (!result.valid) {
+            return { valid: false, error: `Step ${i + 1}: ${result.error}` };
+        }
     }
     return { valid: true };
 }

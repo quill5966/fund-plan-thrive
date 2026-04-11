@@ -3,7 +3,7 @@ import { openai } from "@ai-sdk/openai";
 import { z } from "zod";
 import { financeService } from "@/services/finance";
 import { curateResourcesForGoal } from "@/services/resources";
-import { validateToolParams } from "@/lib/validation";
+import { validateToolParams, validateSteps } from "@/lib/validation";
 
 const getCurrentDate = () => new Date().toISOString().split('T')[0];
 
@@ -241,6 +241,9 @@ export const advisorService = {
                         description: "Create a new life/financial goal",
                         inputSchema: createGoalSchema,
                         execute: async (data) => {
+                            const stepsCheck = validateSteps(data.steps);
+                            if (!stepsCheck.valid) return { success: false, message: stepsCheck.error };
+
                             const result = await financeService.createGoal(userId, data);
 
                             // Check if this was a duplicate (existing goal returned)
