@@ -40,16 +40,31 @@ fund-plan-thrive/
 │   │   ├── dashboard/          # Financial dashboard page
 │   │   ├── goals/              # Goals management page
 │   │   ├── page.tsx            # Home/Chat page (entry point)
-│   │   └── layout.tsx          # Root layout with Sidebar
+│   │   └── layout.tsx          # Root layout: DM Sans + JetBrains Mono fonts, dark bg, ClientLayout wrapper
 │   │
 │   ├── components/
+│   │   ├── advisor/            # AI Advisor slide-over panel
+│   │   │   ├── AdvisorContext.tsx  # React context: isOpen, open(), close(), toggle()
+│   │   │   ├── AdvisorPanel.tsx    # 380px fixed right slide-over with chat + nudges
+│   │   │   └── NudgeCard.tsx       # Proactive suggestion card (hardcoded placeholder)
 │   │   ├── chat/               # VoiceChat component (audio recording + chat UI)
-│   │   ├── dashboard/          # Dashboard-specific components
-│   │   ├── goals/              # Goal cards and management UI
-│   │   ├── ui/                 # Reusable UI primitives (Input, Card, Button, etc.)
-│   │   ├── MetricCard.tsx      # Chart component with Recharts
-│   │   ├── Navbar.tsx          # Top navigation
-│   │   └── Sidebar.tsx         # Left navigation sidebar
+│   │   ├── dashboard/          # SummaryCards (net worth, assets, debts breakdown)
+│   │   ├── goals/              # Goals page components
+│   │   │   ├── GoalCard.tsx        # Legacy card (kept but superseded by new layout)
+│   │   │   ├── GoalDetail.tsx      # Right-panel detail view for selected goal
+│   │   │   ├── GoalSidebar.tsx     # 220px left sidebar: goal list + progress bars
+│   │   │   ├── StepCard.tsx        # Expandable step card (status, tasks, resources)
+│   │   │   ├── StepDot.tsx         # Timeline dot indicator (done/active/pending)
+│   │   │   └── StepTimeline.tsx    # Vertical step timeline with connecting lines
+│   │   ├── navigation/         # Bottom tab bar (replaces Sidebar)
+│   │   │   ├── BottomTabBar.tsx    # Fixed bottom bar: Dashboard / Goals / Advisor tabs
+│   │   │   └── TabItem.tsx         # Individual tab button with icon, label, badge
+│   │   ├── ui/                 # Reusable UI primitives
+│   │   │   ├── Button.tsx, Card.tsx, Input.tsx
+│   │   │   ├── StatusBadge.tsx     # done/active/pending pill badge
+│   │   │   └── ProgressBar.tsx     # Reusable progress bar
+│   │   ├── ClientLayout.tsx    # Client wrapper: AdvisorProvider + BottomTabBar
+│   │   └── MetricCard.tsx      # Net Worth Trend chart (Recharts, dark theme)
 │   │
 │   ├── db/
 │   │   ├── schema.ts           # Drizzle schema definitions (ALL TABLES)
@@ -233,7 +248,7 @@ SESSION_PASSWORD=     # Required - 32+ char static key for iron-session encrypti
 ### Add New Page
 1. Create folder in `src/app/[pagename]/`
 2. Add `page.tsx` for the route
-3. Update `src/components/Sidebar.tsx` for navigation
+3. Add a tab to `src/components/navigation/BottomTabBar.tsx` if it needs top-level navigation
 
 ---
 
@@ -245,6 +260,10 @@ SESSION_PASSWORD=     # Required - 32+ char static key for iron-session encrypti
 4. **Audio stored locally** - `/storage` folder, git-ignored
 5. **Forward-fill charts** - Dashboard densifies sparse historical data to monthly intervals
 6. **Conversational dedup** - AI asks clarifying questions for potential duplicate accounts
+7. **Dark theme** - All color values come from CSS custom properties defined in `globals.css` (`--bg`, `--bg-card`, `--accent`, etc.). Use `var(--*)` in inline styles or Tailwind arbitrary values; avoid hardcoded hex colors in components
+8. **Advisor panel state** - Managed by `AdvisorContext`. Any component can call `useAdvisor()` to open/close the panel. The panel is rendered once in `ClientLayout`, not per-page
+9. **Goals page layout** - Uses a sidebar+detail pattern (`GoalSidebar` + `GoalDetail`). Step status is derived client-side from `isCompleted`: first incomplete step = "active", rest = "pending". No `is_concurrent` DB column exists yet — all steps render sequentially
+10. **Placeholder task items** - `StepCard` renders 3 static placeholder tasks per step (not from DB). A future `goal_step_tasks` table is needed to make these real
 
 ---
 
