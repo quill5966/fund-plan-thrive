@@ -1,6 +1,6 @@
 # AI Context: Fund Plan Thrive
 
-> **Purpose**: This file helps LLMs quickly understand the codebase. Read this first before exploring code.
+> **Purpose**: This file helps LLMs quickly understand the codebase. Read this first before exploring code. Do not read the entire codebase unless explicitly asked to do so or is required to complete the prompt task. 
 
 ## Project Overview
 

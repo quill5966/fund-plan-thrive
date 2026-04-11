@@ -182,7 +182,7 @@ export function AdvisorPanel() {
 
     return (
         <div
-            className="fixed right-0 top-0 bottom-0 flex flex-col z-[100]"
+            className="fixed right-0 top-0 bottom-[60px] flex flex-col z-[100]"
             style={{
                 width: 380,
                 background: "var(--bg-card)",
