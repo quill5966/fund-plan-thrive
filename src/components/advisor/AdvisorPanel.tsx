@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { X, Minus, Mic, Send, Square } from "lucide-react";
+import { X, Mic, Send, Square } from "lucide-react";
 import { useAdvisor } from "./AdvisorContext";
 import { usePathname } from "next/navigation";
 import { useVoiceRecorder } from "@/hooks/useVoiceRecorder";
@@ -208,9 +208,6 @@ export function AdvisorPanel() {
                     <span className="text-sm font-semibold" style={{ color: "var(--text)" }}>Advisor</span>
                 </div>
                 <div className="flex gap-2">
-                    <button onClick={close} className="bg-transparent border-none cursor-pointer p-1" style={{ color: "var(--text-ter)" }}>
-                        <Minus size={16} />
-                    </button>
                     <button onClick={close} className="bg-transparent border-none cursor-pointer p-1" style={{ color: "var(--text-ter)" }}>
                         <X size={18} />
                     </button>

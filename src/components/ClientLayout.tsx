@@ -30,7 +30,7 @@ function MainContent({ children }: { children: ReactNode }) {
 export default function ClientLayout({ children }: { children: ReactNode }) {
     return (
         <AdvisorProvider>
-            <div className="flex flex-col min-h-screen" style={{ background: "var(--bg)" }}>
+            <div className="flex flex-col h-screen" style={{ background: "var(--bg)" }}>
                 <MainContent>{children}</MainContent>
                 <AdvisorPanel />
                 <BottomTabBar />

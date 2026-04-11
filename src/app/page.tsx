@@ -128,7 +128,7 @@ export default function Home() {
     // Show loading state while checking session
     if (isLoading) {
         return (
-            <div className="min-h-screen flex items-center justify-center" style={{ background: "var(--bg)" }}>
+            <div className="h-full flex items-center justify-center" style={{ background: "var(--bg)" }}>
                 <div className="text-center">
                     <div
                         className="w-12 h-12 border-4 border-t-transparent rounded-full animate-spin mx-auto mb-4"
@@ -141,7 +141,7 @@ export default function Home() {
     }
 
     return (
-        <div className="min-h-screen flex flex-col" style={{ background: "var(--bg)", color: "var(--text)" }}>
+        <div className="h-full flex flex-col" style={{ background: "var(--bg)", color: "var(--text)" }}>
 
             {/* ── Passphrase Gate ──────────────────────────────────────── */}
             {!isAuthenticated && (
