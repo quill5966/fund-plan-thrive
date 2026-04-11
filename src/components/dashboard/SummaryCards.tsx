@@ -1,7 +1,5 @@
 "use client";
 
-import { TrendingUp } from "lucide-react";
-
 interface AssetItem {
     id: string;
     name: string;
@@ -25,19 +23,21 @@ const formatCurrency = (value: number) => {
     }).format(value);
 };
 
-// Color palettes matching Net Worth Trend chart
-const ASSET_COLORS = ["#10b981", "#34d399", "#6ee7b7", "#a7f3d0", "#d1fae5"];
-const DEBT_COLORS = ["#ef4444", "#f87171", "#fca5a5", "#fecaca", "#fee2e2"];
+const ASSET_COLORS = ["#34d399", "#c36eff", "#60a5fa", "#fbbf24", "#f87171"];
+const DEBT_COLORS = ["#f87171", "#fb923c", "#fbbf24", "#fca5a5", "#fee2e2"];
 
-// Simple CSS-based donut chart using conic-gradient
+const PencilIcon = () => (
+    <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M8.5 1.5l2 2L4 10H2V8z"/>
+    </svg>
+);
+
 interface DonutChartProps {
     items: { name: string; value: number; percentage: number; color: string }[];
-    total: number;
     centerLabel: string;
 }
 
 function DonutChart({ items, centerLabel }: DonutChartProps) {
-    // Build conic-gradient segments
     let gradientParts: string[] = [];
     let currentAngle = 0;
 
@@ -47,33 +47,36 @@ function DonutChart({ items, centerLabel }: DonutChartProps) {
         currentAngle += angle;
     });
 
-    // Handle empty state
     if (items.length === 0) {
-        gradientParts = ["#e5e7eb 0deg 360deg"];
+        gradientParts = ["#2a2f3e 0deg 360deg"];
     }
 
     const gradient = `conic-gradient(${gradientParts.join(", ")})`;
 
     return (
         <div
-            className="w-20 h-20 rounded-full flex items-center justify-center relative flex-shrink-0"
-            style={{ background: gradient }}
+            style={{
+                width: 72, height: 72, borderRadius: "50%",
+                background: gradient,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                flexShrink: 0,
+                position: "relative",
+            }}
         >
-            {/* Inner white circle to create donut effect */}
-            <div className="w-14 h-14 rounded-full bg-white flex items-center justify-center">
-                <span className="text-xs font-semibold text-gray-700">{centerLabel}</span>
+            <div style={{
+                width: 50, height: 50, borderRadius: "50%",
+                background: "var(--bg-card)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+            }}>
+                <span style={{ fontSize: 9, fontWeight: 600, color: "var(--text-sec)" }}>{centerLabel}</span>
             </div>
         </div>
     );
 }
 
 export default function SummaryCards({ netWorth, totalAssets, totalDebts, assets, debts }: SummaryCardsProps) {
-    // Process assets with percentages and colors (sorted by value descending)
     const processedAssets = assets
-        .map((asset, index) => ({
-            ...asset,
-            numericValue: parseFloat(asset.value),
-        }))
+        .map(asset => ({ ...asset, numericValue: parseFloat(asset.value) }))
         .sort((a, b) => b.numericValue - a.numericValue)
         .map((asset, index) => ({
             name: asset.name,
@@ -82,12 +85,8 @@ export default function SummaryCards({ netWorth, totalAssets, totalDebts, assets
             color: ASSET_COLORS[index % ASSET_COLORS.length],
         }));
 
-    // Process debts with percentages and colors (sorted by value descending)
     const processedDebts = debts
-        .map((debt) => ({
-            ...debt,
-            numericValue: parseFloat(debt.value),
-        }))
+        .map(debt => ({ ...debt, numericValue: parseFloat(debt.value) }))
         .sort((a, b) => b.numericValue - a.numericValue)
         .map((debt, index) => ({
             name: debt.name,
@@ -96,84 +95,75 @@ export default function SummaryCards({ netWorth, totalAssets, totalDebts, assets
             color: DEBT_COLORS[index % DEBT_COLORS.length],
         }));
 
+    const cardStyle: React.CSSProperties = {
+        background: "var(--bg-card)",
+        border: "1px solid var(--border)",
+        borderRadius: 12,
+        padding: 20,
+    };
+
     return (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16, marginBottom: 24 }}>
             {/* Net Worth Card */}
-            <div className="bg-white rounded-xl border border-gray-100 shadow-sm shadow-gray-900/5 p-6">
-                <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-sm font-semibold text-gray-900">Net Worth</h3>
-                    <TrendingUp className="w-4 h-4 text-gray-400" />
-                </div>
-                <div className="text-3xl font-bold text-gray-900 mb-2">
+            <div style={cardStyle}>
+                <div style={{ fontSize: 12, color: "var(--text-sec)", marginBottom: 8, fontWeight: 500 }}>Net Worth</div>
+                <div style={{ fontSize: 24, fontWeight: 700, letterSpacing: "-0.02em", color: "var(--text)" }}>
                     {formatCurrency(netWorth)}
                 </div>
-                <div className="text-sm text-emerald-600 flex items-center gap-1">
-                    <span>↗</span>
-                    <span>+$5,200 this month</span>
-                </div>
+                <div style={{ fontSize: 12, color: "var(--green)", marginTop: 4 }}>+$5,200 this month</div>
             </div>
 
-            {/* Assets Breakdown Card */}
-            <div className="bg-white rounded-xl border border-gray-100 shadow-sm shadow-gray-900/5 p-6">
-                <h3 className="text-sm font-semibold text-gray-900 mb-4">Assets Breakdown</h3>
+            {/* Assets Card */}
+            <div style={cardStyle}>
+                <div style={{ fontSize: 12, color: "var(--text-sec)", marginBottom: 8, fontWeight: 500 }}>Assets</div>
+                <div style={{ fontSize: 24, fontWeight: 700, letterSpacing: "-0.02em", color: "var(--text)", marginBottom: 12 }}>
+                    {formatCurrency(totalAssets)}
+                </div>
                 {processedAssets.length > 0 ? (
-                    <div className="flex items-center gap-4 min-h-24">
-                        <DonutChart
-                            items={processedAssets}
-                            total={totalAssets}
-                            centerLabel={formatCurrency(totalAssets)}
-                        />
-                        <div className="flex-1 space-y-2 text-sm">
-                            {processedAssets.map((asset, index) => (
-                                <div key={index} className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
-                                        <div
-                                            className="w-2 h-2 rounded-full"
-                                            style={{ backgroundColor: asset.color }}
-                                        />
-                                        <span className="text-gray-600">{asset.name}</span>
-                                    </div>
-                                    <span className="text-gray-900 font-medium">{asset.percentage}%</span>
+                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                        <DonutChart items={processedAssets} centerLabel={`$${Math.round(totalAssets / 1000)}k`} />
+                        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 6 }}>
+                            {processedAssets.map((asset, i) => (
+                                <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}>
+                                    <span style={{ color: "var(--text-sec)", display: "flex", alignItems: "center", gap: 6 }}>
+                                        <span style={{ width: 6, height: 6, borderRadius: "50%", background: asset.color, display: "inline-block" }}/>
+                                        {asset.name}
+                                        <span style={{ color: "var(--text-ter)", cursor: "pointer", opacity: 0.7 }}><PencilIcon /></span>
+                                    </span>
+                                    <span style={{ color: "var(--text)" }}>${asset.value.toLocaleString()}</span>
                                 </div>
                             ))}
                         </div>
                     </div>
                 ) : (
-                    <div className="text-center py-4 text-gray-500 text-sm">
-                        No assets recorded
-                    </div>
+                    <div style={{ fontSize: 12, color: "var(--text-ter)" }}>No assets recorded</div>
                 )}
             </div>
 
-            {/* Debts Breakdown Card */}
-            <div className="bg-white rounded-xl border border-gray-100 shadow-sm shadow-gray-900/5 p-6">
-                <h3 className="text-sm font-semibold text-gray-900 mb-4">Debts Breakdown</h3>
+            {/* Debts Card */}
+            <div style={cardStyle}>
+                <div style={{ fontSize: 12, color: "var(--text-sec)", marginBottom: 8, fontWeight: 500 }}>Debts</div>
+                <div style={{ fontSize: 24, fontWeight: 700, letterSpacing: "-0.02em", color: "var(--text)", marginBottom: 12 }}>
+                    {formatCurrency(totalDebts)}
+                </div>
                 {processedDebts.length > 0 ? (
-                    <div className="flex items-center gap-4 min-h-24">
-                        <DonutChart
-                            items={processedDebts}
-                            total={totalDebts}
-                            centerLabel={formatCurrency(totalDebts)}
-                        />
-                        <div className="flex-1 space-y-2 text-sm">
-                            {processedDebts.map((debt, index) => (
-                                <div key={index} className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
-                                        <div
-                                            className="w-2 h-2 rounded-full"
-                                            style={{ backgroundColor: debt.color }}
-                                        />
-                                        <span className="text-gray-600">{debt.name}</span>
-                                    </div>
-                                    <span className="text-gray-900 font-medium">{debt.percentage}%</span>
+                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                        <DonutChart items={processedDebts} centerLabel={`$${Math.round(totalDebts / 1000)}k`} />
+                        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 6 }}>
+                            {processedDebts.map((debt, i) => (
+                                <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}>
+                                    <span style={{ color: "var(--text-sec)", display: "flex", alignItems: "center", gap: 6 }}>
+                                        <span style={{ width: 6, height: 6, borderRadius: "50%", background: debt.color, display: "inline-block" }}/>
+                                        {debt.name}
+                                        <span style={{ color: "var(--text-ter)", cursor: "pointer", opacity: 0.7 }}><PencilIcon /></span>
+                                    </span>
+                                    <span style={{ color: "var(--text)" }}>${debt.value.toLocaleString()}</span>
                                 </div>
                             ))}
                         </div>
                     </div>
                 ) : (
-                    <div className="text-center py-4 text-gray-500 text-sm">
-                        No debts recorded
-                    </div>
+                    <div style={{ fontSize: 12, color: "var(--text-ter)" }}>No debts recorded</div>
                 )}
             </div>
         </div>

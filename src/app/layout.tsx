@@ -27,7 +27,8 @@ export default function RootLayout({
     return (
         <html lang="en">
             <body
-                className={`${dmSans.variable} ${jetbrainsMono.variable} antialiased bg-[#E8EAED] text-gray-900`}
+                className={`${dmSans.variable} ${jetbrainsMono.variable} antialiased`}
+                style={{ background: "var(--bg)", color: "var(--text)" }}
             >
                 <ClientLayout>{children}</ClientLayout>
             </body>

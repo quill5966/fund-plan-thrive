@@ -13,16 +13,28 @@ export default async function DashboardPage() {
 
     if (!userId) {
         return (
-            <div className="max-w-7xl mx-auto px-8 py-20 text-center">
-                <div className="bg-white rounded-xl p-12 border border-gray-100 shadow-sm shadow-gray-900/5 max-w-2xl mx-auto">
-                    <div className="text-5xl mb-6">🔒</div>
-                    <h2 className="text-2xl font-bold text-gray-900 mb-4">No Active Session</h2>
-                    <p className="text-gray-600 mb-8 text-lg">
+            <div style={{ maxWidth: 960, margin: "0 auto", padding: "80px 32px", textAlign: "center" }}>
+                <div style={{
+                    background: "var(--bg-card)",
+                    border: "1px solid var(--border)",
+                    borderRadius: 16,
+                    padding: 48,
+                    maxWidth: 480,
+                    margin: "0 auto",
+                }}>
+                    <div style={{ fontSize: 48, marginBottom: 20 }}>🔒</div>
+                    <h2 style={{ fontSize: 20, fontWeight: 700, color: "var(--text)", marginBottom: 12 }}>No Active Session</h2>
+                    <p style={{ color: "var(--text-sec)", marginBottom: 28, lineHeight: 1.6 }}>
                         Please go to the Chat page and start a conversation with the AI advisor to view your dashboard.
                     </p>
                     <Link
                         href="/"
-                        className="inline-flex items-center justify-center px-6 py-3 border border-transparent text-base font-medium rounded-lg text-white bg-fuchsia-500 hover:bg-fuchsia-600 transition-colors"
+                        style={{
+                            display: "inline-flex", alignItems: "center", justifyContent: "center",
+                            padding: "10px 24px", borderRadius: 10, border: "none",
+                            background: "linear-gradient(135deg, var(--accent), #8b5cf6)",
+                            color: "#fff", fontSize: 14, fontWeight: 600, textDecoration: "none",
+                        }}
                     >
                         Go to Chat
                     </Link>
@@ -35,18 +47,29 @@ export default async function DashboardPage() {
     const user = await userService.getUserById(userId);
 
     if (!user) {
-        // Cookie exists but user not found in DB? Treat as no session.
         return (
-            <div className="max-w-7xl mx-auto px-8 py-20 text-center">
-                <div className="bg-white rounded-xl p-12 border border-gray-100 shadow-sm shadow-gray-900/5 max-w-2xl mx-auto">
-                    <div className="text-5xl mb-6">⚠️</div>
-                    <h2 className="text-2xl font-bold text-gray-900 mb-4">User Not Found</h2>
-                    <p className="text-gray-600 mb-8 text-lg">
-                        We couldn't find your data. Please try uploading your audio again.
+            <div style={{ maxWidth: 960, margin: "0 auto", padding: "80px 32px", textAlign: "center" }}>
+                <div style={{
+                    background: "var(--bg-card)",
+                    border: "1px solid var(--border)",
+                    borderRadius: 16,
+                    padding: 48,
+                    maxWidth: 480,
+                    margin: "0 auto",
+                }}>
+                    <div style={{ fontSize: 48, marginBottom: 20 }}>⚠️</div>
+                    <h2 style={{ fontSize: 20, fontWeight: 700, color: "var(--text)", marginBottom: 12 }}>User Not Found</h2>
+                    <p style={{ color: "var(--text-sec)", marginBottom: 28, lineHeight: 1.6 }}>
+                        We couldn&apos;t find your data. Please try uploading your audio again.
                     </p>
                     <Link
                         href="/"
-                        className="inline-flex items-center justify-center px-6 py-3 border border-transparent text-base font-medium rounded-lg text-white bg-fuchsia-500 hover:bg-fuchsia-600 transition-colors"
+                        style={{
+                            display: "inline-flex", alignItems: "center", justifyContent: "center",
+                            padding: "10px 24px", borderRadius: 10, border: "none",
+                            background: "linear-gradient(135deg, var(--accent), #8b5cf6)",
+                            color: "#fff", fontSize: 14, fontWeight: 600, textDecoration: "none",
+                        }}
                     >
                         Go to Chat
                     </Link>

@@ -1,7 +1,5 @@
 import React from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ComposedChart, Bar, ReferenceLine } from "recharts";
-import { Info } from "lucide-react";
-import clsx from "clsx";
 
 interface MetricCardProps {
     title: string;
@@ -30,30 +28,20 @@ const formatCompactCurrency = (value: number) => {
     }).format(value);
 };
 
-export default function MetricCard({ title, currentValue, data, type = "networth", infoTooltip, range, onRangeChange }: MetricCardProps) {
-    // Determine color based on type
-    const color = type === "debt" ? "#ef4444" : "#3b82f6";
+export default function MetricCard({ title, currentValue, data, type = "networth", range, onRangeChange }: MetricCardProps) {
+    const color = type === "debt" ? "#f87171" : "#60a5fa";
 
-    // Prepare data for composed chart (negate debts for visual bar)
     const composedData = type === "networth"
-        ? data.map(d => ({
-            ...d,
-            debtsNegative: d.debts ? -d.debts : 0
-        }))
+        ? data.map(d => ({ ...d, debtsNegative: d.debts ? -d.debts : 0 }))
         : data;
 
-    // Calculate Year Boundaries for Net Worth chart
     const yearBoundaries: { date: string; prevYear: number; currYear: number }[] = [];
     if (type === "networth" && composedData.length > 1) {
         let lastYear = new Date(composedData[0].date).getFullYear();
         for (let i = 1; i < composedData.length; i++) {
             const currentYear = new Date(composedData[i].date).getFullYear();
             if (currentYear !== lastYear) {
-                yearBoundaries.push({
-                    date: composedData[i].date, // The first data point of the new year
-                    prevYear: lastYear,
-                    currYear: currentYear
-                });
+                yearBoundaries.push({ date: composedData[i].date, prevYear: lastYear, currYear: currentYear });
                 lastYear = currentYear;
             }
         }
@@ -61,45 +49,44 @@ export default function MetricCard({ title, currentValue, data, type = "networth
 
     const formatDateTick = (dateStr: string) => {
         const date = new Date(dateStr);
-        // Default to monthly format since we removed 1M and are densifying monthly
         if (range === "YTD" || range === "1Y") {
-            return date.toLocaleDateString('en-US', { month: 'short' });
+            return date.toLocaleDateString("en-US", { month: "short" });
         } else {
-            return date.toLocaleDateString('en-US', { year: '2-digit', month: 'short' });
+            return date.toLocaleDateString("en-US", { year: "2-digit", month: "short" });
         }
     };
 
     const CustomTooltip = ({ active, payload, label }: any) => {
         if (active && payload && payload.length) {
             return (
-                <div className="bg-gray-900 text-white p-3 rounded-lg shadow-lg border border-gray-700 text-xs z-50">
-                    <p className="font-semibold mb-2">{new Date(label).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</p>
-                    {/* Iterate through payload to show all metrics */}
+                <div style={{
+                    background: "#181b24",
+                    border: "1px solid #2a2f3e",
+                    borderRadius: 10,
+                    padding: "10px 14px",
+                    fontSize: 12,
+                    color: "#e8eaf0",
+                    boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
+                }}>
+                    <p style={{ fontWeight: 600, marginBottom: 8 }}>
+                        {new Date(label).toLocaleDateString("en-US", { month: "long", year: "numeric" })}
+                    </p>
                     {payload.map((entry: any, index: number) => {
                         let name = entry.name;
                         let value = entry.value;
-                        let color = entry.color;
+                        let dotColor = entry.color;
 
-                        // Customize labels and values for networth chart
-                        if (entry.dataKey === "assets") {
-                            name = "Total Assets";
-                            color = "#10b981"; // Green
-                        } else if (entry.dataKey === "debtsNegative") {
-                            name = "Total Debt";
-                            value = Math.abs(value); // Show positive value
-                            color = "#ef4444"; // Red
-                        } else if (entry.dataKey === "value") {
-                            name = "Net Worth";
-                            color = "#ffffff";
-                        }
+                        if (entry.dataKey === "assets") { name = "Total Assets"; dotColor = "#34d399"; }
+                        else if (entry.dataKey === "debtsNegative") { name = "Total Debt"; value = Math.abs(value); dotColor = "#f87171"; }
+                        else if (entry.dataKey === "value") { name = "Net Worth"; dotColor = "#c36eff"; }
 
                         return (
-                            <div key={index} className="flex items-center justify-between gap-4 mb-1">
-                                <div className="flex items-center gap-2">
-                                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: color }} />
-                                    <span>{name}:</span>
+                            <div key={index} style={{ display: "flex", justifyContent: "space-between", gap: 16, marginBottom: 4 }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                    <div style={{ width: 6, height: 6, borderRadius: "50%", background: dotColor }}/>
+                                    <span style={{ color: "#8b91a5" }}>{name}:</span>
                                 </div>
-                                <span className="font-mono">{formatCurrency(value)}</span>
+                                <span style={{ fontFamily: "monospace" }}>{formatCurrency(value)}</span>
                             </div>
                         );
                     })}
@@ -109,122 +96,126 @@ export default function MetricCard({ title, currentValue, data, type = "networth
         return null;
     };
 
-    // Custom Label for Year Divider
     const YearDividerLabel = (props: any) => {
         const { viewBox, boundary } = props;
         const x = viewBox.x;
         const y = viewBox.y;
-
         return (
             <g>
-                {/* Previous Year (Left) */}
-                <text x={x - 10} y={y - 10} fill="#9ca3af" textAnchor="end" fontSize={10}>
-                    ← {boundary.prevYear}
-                </text>
-                {/* Current Year (Right) */}
-                <text x={x + 10} y={y - 10} fill="#6b7280" textAnchor="start" fontSize={10}>
-                    {boundary.currYear} →
-                </text>
+                <text x={x - 10} y={y - 10} fill="#5c6178" textAnchor="end" fontSize={10}>← {boundary.prevYear}</text>
+                <text x={x + 10} y={y - 10} fill="#5c6178" textAnchor="start" fontSize={10}>{boundary.currYear} →</text>
             </g>
         );
     };
 
     return (
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm shadow-gray-900/5 p-6 flex flex-col h-80">
-            {/* Header with Title and Time Toggles */}
-            <div className="flex items-center justify-between mb-4">
-                <span className="text-lg font-semibold text-gray-900">
+        <div style={{
+            background: "var(--bg-card)",
+            border: "1px solid var(--border)",
+            borderRadius: 12,
+            padding: 24,
+            display: "flex",
+            flexDirection: "column",
+            height: 320,
+        }}>
+            {/* Header */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+                <div style={{ fontSize: 15, fontWeight: 600, color: "var(--text)" }}>
                     {type === "networth" ? "Net Worth Trend" : title}
-                </span>
+                </div>
                 {onRangeChange && (
-                    <div className="flex bg-gray-100 rounded-lg p-1 text-xs">
+                    <div style={{ display: "flex", gap: 4 }}>
                         {(["YTD", "1Y", "ALL"] as const).map((r) => (
                             <button
                                 key={r}
                                 onClick={() => onRangeChange(r)}
-                                className={clsx(
-                                    "px-3 py-1 rounded font-medium transition-all duration-200",
-                                    range === r
-                                        ? "bg-fuchsia-500 text-white shadow-sm"
-                                        : "text-gray-600 hover:text-gray-900"
-                                )}
-                            >
-                                {r === "ALL" ? "All" : r}
-                            </button>
+                                style={{
+                                    padding: "4px 10px",
+                                    borderRadius: 6,
+                                    border: "none",
+                                    fontSize: 11,
+                                    fontWeight: 500,
+                                    cursor: "pointer",
+                                    background: range === r ? "var(--accent)" : "transparent",
+                                    color: range === r ? "#fff" : "var(--text-ter)",
+                                    transition: "all 0.15s",
+                                }}
+                            >{r === "ALL" ? "All" : r}</button>
                         ))}
                     </div>
                 )}
             </div>
 
-            {/* Chart Section */}
-            <div className="flex-1 w-full min-h-0">
+            {/* Chart */}
+            <div style={{ flex: 1, minHeight: 0 }}>
                 <ResponsiveContainer width="100%" height="100%">
                     {type === "networth" ? (
                         <ComposedChart data={composedData} margin={{ top: 30, right: 10, left: -20, bottom: 0 }}>
-                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#2a2f3e" />
                             <XAxis
                                 dataKey="date"
                                 tickFormatter={formatDateTick}
-                                tick={{ fontSize: 10, fill: '#9ca3af' }}
+                                tick={{ fontSize: 10, fill: "#5c6178" }}
                                 axisLine={false}
                                 tickLine={false}
                                 minTickGap={30}
                             />
                             <YAxis
                                 tickFormatter={formatCompactCurrency}
-                                tick={{ fontSize: 10, fill: '#9ca3af' }}
+                                tick={{ fontSize: 10, fill: "#5c6178" }}
                                 axisLine={false}
                                 tickLine={false}
-                                domain={['auto', 'auto']}
+                                domain={["auto", "auto"]}
                             />
-                            <Tooltip content={<CustomTooltip />} cursor={{ fill: 'transparent' }} />
-                            <ReferenceLine y={0} stroke="#e5e7eb" />
-
-                            {/* Year Dividers */}
+                            <Tooltip content={<CustomTooltip />} cursor={{ fill: "rgba(195,110,255,0.06)" }} />
+                            <ReferenceLine y={0} stroke="#2a2f3e" />
                             {yearBoundaries.map((boundary, index) => (
                                 <ReferenceLine
                                     key={index}
                                     x={boundary.date}
-                                    stroke="#e5e7eb"
+                                    stroke="#2a2f3e"
                                     strokeDasharray="3 3"
                                     label={<YearDividerLabel boundary={boundary} />}
                                 />
                             ))}
-
-                            <Bar dataKey="assets" fill="#10b981" barSize={20} radius={[4, 4, 0, 0]} />
-                            <Bar dataKey="debtsNegative" fill="#ef4444" barSize={20} radius={[0, 0, 4, 4]} />
+                            <Bar dataKey="assets" fill="#34d399" barSize={20} radius={[4, 4, 0, 0]} opacity={0.7} />
+                            <Bar dataKey="debtsNegative" fill="#f87171" barSize={20} radius={[0, 0, 4, 4]} opacity={0.7} />
                             <Line
                                 type="monotone"
                                 dataKey="value"
-                                stroke="#D946EF" // Fuchsia for net worth line
-                                strokeWidth={3}
-                                dot={{ r: 4, fill: "#D946EF", strokeWidth: 2, stroke: "#fff" }}
-                                activeDot={{ r: 6 }}
+                                stroke="#c36eff"
+                                strokeWidth={2.5}
+                                dot={{ r: 3, fill: "#c36eff", strokeWidth: 2, stroke: "#181b24" }}
+                                activeDot={{ r: 5 }}
                             />
                         </ComposedChart>
                     ) : (
-                        // Fallback to simple line chart for other types
                         <LineChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#2a2f3e" />
                             <XAxis
                                 dataKey="date"
                                 tickFormatter={formatDateTick}
-                                tick={{ fontSize: 10, fill: '#9ca3af' }}
+                                tick={{ fontSize: 10, fill: "#5c6178" }}
                                 axisLine={false}
                                 tickLine={false}
                                 minTickGap={30}
                             />
                             <YAxis
                                 tickFormatter={formatCompactCurrency}
-                                tick={{ fontSize: 10, fill: '#9ca3af' }}
+                                tick={{ fontSize: 10, fill: "#5c6178" }}
                                 axisLine={false}
                                 tickLine={false}
-                                domain={['auto', 'auto']}
+                                domain={["auto", "auto"]}
                             />
                             <Tooltip
-                                formatter={(value: number | undefined) => value !== undefined ? formatCurrency(value) : ''}
+                                formatter={(value: number | undefined) => value !== undefined ? formatCurrency(value) : ""}
                                 labelFormatter={(label) => new Date(label).toLocaleDateString()}
-                                contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                                contentStyle={{
+                                    background: "#181b24",
+                                    border: "1px solid #2a2f3e",
+                                    borderRadius: 8,
+                                    color: "#e8eaf0",
+                                }}
                             />
                             <Line
                                 type="monotone"

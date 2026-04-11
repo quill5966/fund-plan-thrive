@@ -3,13 +3,11 @@
 import React, { useState, useMemo } from "react";
 import MetricCard from "@/components/MetricCard";
 import SummaryCards from "@/components/dashboard/SummaryCards";
-import clsx from "clsx";
 import Link from "next/link";
 import { Target } from "lucide-react";
 
 type TimeRange = "YTD" | "1Y" | "ALL";
 
-// Goal types matching what financeService.getGoals returns
 interface Resource {
     id: string;
     title: string;
@@ -118,16 +116,57 @@ export default function DashboardClient({ summary, history, goals }: DashboardCl
                 assets: h.assets,
                 debts: h.debts
             })),
-            assets: filteredHistory.map(h => ({ date: h.date, value: h.assets })),
-            debts: filteredHistory.map(h => ({ date: h.date, value: h.debts })),
         };
     }, [filteredHistory]);
 
     return (
-        <div className="max-w-7xl mx-auto px-8 py-8">
-            <header className="mb-8">
-                <h1 className="text-2xl font-bold text-gray-900">Overview</h1>
-            </header>
+        <div style={{ maxWidth: 960, margin: "0 auto", padding: "0 32px 80px" }}>
+            {/* Top bar */}
+            <div style={{
+                padding: "16px 0",
+                marginBottom: 8,
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+            }}>
+                <div style={{
+                    width: 28, height: 28, borderRadius: 7,
+                    background: "linear-gradient(135deg, var(--accent), #8b5cf6)",
+                    display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14,
+                }}>💰</div>
+                <span style={{ fontSize: 15, fontWeight: 700, letterSpacing: "-0.01em", color: "var(--text)" }}>
+                    Fund Plan Thrive
+                </span>
+            </div>
+
+            <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 24, letterSpacing: "-0.02em", color: "var(--text)" }}>
+                Overview
+            </h1>
+
+            {/* Bank connect banner */}
+            <div style={{
+                background: "rgba(96,165,250,0.08)",
+                border: "1px solid rgba(96,165,250,0.2)",
+                borderRadius: 10,
+                padding: "10px 16px",
+                marginBottom: 20,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                fontSize: 13,
+            }}>
+                <span style={{ color: "var(--blue)" }}>🔗 Connect your bank accounts for automatic tracking</span>
+                <button style={{
+                    background: "rgba(96,165,250,0.15)",
+                    border: "1px solid rgba(96,165,250,0.3)",
+                    color: "var(--blue)",
+                    padding: "5px 12px",
+                    borderRadius: 6,
+                    fontSize: 12,
+                    fontWeight: 500,
+                    cursor: "pointer",
+                }}>Connect</button>
+            </div>
 
             {/* Summary Cards Row */}
             <SummaryCards
@@ -139,7 +178,7 @@ export default function DashboardClient({ summary, history, goals }: DashboardCl
             />
 
             {/* Net Worth Trend Chart */}
-            <div className="grid grid-cols-1 gap-6 mb-8">
+            <div style={{ marginBottom: 24 }}>
                 <MetricCard
                     title="Net Worth"
                     currentValue={summary.netWorth}
@@ -151,52 +190,98 @@ export default function DashboardClient({ summary, history, goals }: DashboardCl
             </div>
 
             {/* Goals Summary Widget */}
-            <div className="bg-white rounded-xl border border-gray-100 shadow-sm shadow-gray-900/5 p-6">
-                <div className="flex items-center justify-between mb-6">
-                    <h2 className="text-lg font-semibold text-gray-900">Financial Goals</h2>
-                    <Link
-                        href="/goals"
-                        className="text-sm text-fuchsia-500 hover:text-fuchsia-600 font-medium"
-                    >
-                        View all →
-                    </Link>
+            <div style={{
+                background: "var(--bg-card)",
+                border: "1px solid var(--border)",
+                borderRadius: 12,
+                padding: 24,
+            }}>
+                <div style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    marginBottom: 16,
+                }}>
+                    <div style={{ fontSize: 15, fontWeight: 600, color: "var(--text)" }}>Goals</div>
+                    <Link href="/goals" style={{
+                        color: "var(--accent)",
+                        fontSize: 13,
+                        fontWeight: 500,
+                        textDecoration: "none",
+                    }}>View all →</Link>
                 </div>
 
                 {goals.length > 0 ? (
-                    <div className="space-y-5">
-                        {goals.map((goal) => {
+                    <div>
+                        {goals.map((goal, i) => {
                             const target = parseFloat(goal.targetAmount || "0");
                             const current = parseFloat(goal.currentAmount || "0");
-                            const percentage = target > 0 ? Math.round((current / target) * 100) : 0;
-                            const leftToSave = Math.max(0, target - current);
+                            const hasTarget = target > 0;
+                            const percentage = hasTarget ? Math.round((current / target) * 100) : Math.round(
+                                (goal.steps.filter(s => s.isCompleted).length / Math.max(goal.steps.length, 1)) * 100
+                            );
+                            const doneSteps = goal.steps.filter(s => s.isCompleted).length;
 
                             return (
-                                <div key={goal.id} className="space-y-2">
-                                    <div className="flex items-center justify-between text-sm">
-                                        <div className="flex items-center gap-2">
-                                            <Target className="w-4 h-4 text-fuchsia-500" />
-                                            <span className="font-medium text-gray-900">{goal.title}</span>
-                                        </div>
-                                        <div className="flex items-center gap-4 text-gray-500">
-                                            <span className="font-semibold text-gray-900">{percentage}%</span>
-                                            <span>Target <span className="text-emerald-600 font-medium">${target.toLocaleString()}</span></span>
-                                            <span>Saved <span className="text-fuchsia-600 font-medium">${current.toLocaleString()}</span></span>
-                                        </div>
+                                <Link
+                                    key={goal.id}
+                                    href="/goals"
+                                    style={{
+                                        display: "flex",
+                                        alignItems: "center",
+                                        gap: 16,
+                                        padding: "12px 0",
+                                        borderTop: i > 0 ? "1px solid var(--border)" : "none",
+                                        textDecoration: "none",
+                                        cursor: "pointer",
+                                    }}
+                                >
+                                    <div style={{ flex: 1 }}>
+                                        <div style={{ fontSize: 14, fontWeight: 500, color: "var(--text)" }}>{goal.title}</div>
+                                        {hasTarget ? (
+                                            <div style={{ fontSize: 12, color: "var(--text-sec)", marginTop: 4 }}>
+                                                ${current.toLocaleString()} / ${target.toLocaleString()} saved
+                                            </div>
+                                        ) : (
+                                            <div style={{ fontSize: 12, color: "var(--text-ter)", marginTop: 4 }}>
+                                                {doneSteps} of {goal.steps.length} steps done
+                                            </div>
+                                        )}
                                     </div>
-                                    <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                                        <div
-                                            className="h-full bg-fuchsia-500 rounded-full transition-all duration-300"
-                                            style={{ width: `${Math.min(100, percentage)}%` }}
-                                        />
+                                    {/* Progress */}
+                                    <div style={{ width: 120, display: "flex", alignItems: "center", gap: 8 }}>
+                                        <div style={{
+                                            flex: 1, height: 4,
+                                            background: "var(--bg-surface)",
+                                            borderRadius: 2,
+                                            overflow: "hidden",
+                                        }}>
+                                            <div style={{
+                                                width: `${Math.min(100, percentage)}%`,
+                                                height: "100%",
+                                                background: hasTarget ? "var(--green)" : "var(--accent)",
+                                                borderRadius: 2,
+                                            }}/>
+                                        </div>
+                                        <span style={{
+                                            fontSize: 11,
+                                            fontWeight: 500,
+                                            minWidth: 36,
+                                            textAlign: "center",
+                                            padding: "2px 6px",
+                                            borderRadius: 10,
+                                            background: hasTarget ? "var(--green-dim)" : "var(--accent-dim)",
+                                            color: hasTarget ? "var(--green)" : "var(--accent)",
+                                        }}>{percentage}%</span>
                                     </div>
-                                </div>
+                                </Link>
                             );
                         })}
                     </div>
                 ) : (
-                    <div className="text-center py-6 text-gray-500">
-                        <Target className="w-8 h-8 mx-auto mb-2 text-gray-300" />
-                        <p>No goals yet. Start a conversation to create one.</p>
+                    <div style={{ textAlign: "center", padding: "24px 0", color: "var(--text-ter)" }}>
+                        <Target style={{ width: 32, height: 32, margin: "0 auto 8px", opacity: 0.4 }} />
+                        <p style={{ fontSize: 14 }}>No goals yet. Start a conversation to create one.</p>
                     </div>
                 )}
             </div>
