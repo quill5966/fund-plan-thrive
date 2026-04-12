@@ -107,6 +107,7 @@ All tables defined in `src/db/schema.ts`:
 | `messages` | Individual chat messages | `conversationId`, `role`, `content` |
 | `goals` | Financial/life goals | `userId`, `title`, `description`, `targetAmount`, `status` |
 | `goal_steps` | Actionable steps per goal | `goalId`, `description`, `order`, `isCompleted`, `isUserDefined` |
+| `goal_step_tasks` | User-created task items per step | `stepId`, `description`, `isCompleted`, `order` |
 | `goal_resources` | Curated resources per step | `stepId`, `title`, `url`, `publisher`, `credibilityScore` |
 
 **Asset/Debt Types**: `checking`, `savings`, `investment`, `credit_card`, `loan`, `mortgage`
@@ -167,7 +168,9 @@ Two-LLM pipeline for curating goal step resources.
 | `/api/chat` | POST | Save message to conversation history |
 | `/api/conversation` | GET | Load existing session + conversation history |
 | `/api/init-conversation` | POST | Initialize conversation for new/returning users |
-| `/api/goals` | GET | Fetch all goals for current user |
+| `/api/goals` | GET | Fetch all goals for current user (includes tasks nested under each step) |
+| `/api/goals/[goalId]/steps/[stepId]/tasks` | GET, POST | List tasks for a step / create a new task |
+| `/api/goals/[goalId]/steps/[stepId]/tasks/[taskId]` | PUT, DELETE | Update task fields (description + isCompleted) / delete task |
 | `/api/session` | DELETE | Clear iron-session (logout) |
 | `/api/auth/login` | POST | Validate passphrase, create authenticated session |
 | `/api/auth/check` | GET | Return current authentication status |
@@ -263,7 +266,7 @@ SESSION_PASSWORD=     # Required - 32+ char static key for iron-session encrypti
 7. **Dark theme** - All color values come from CSS custom properties defined in `globals.css` (`--bg`, `--bg-card`, `--accent`, etc.). Use `var(--*)` in inline styles or Tailwind arbitrary values; avoid hardcoded hex colors in components
 8. **Advisor panel state** - Managed by `AdvisorContext`. Any component can call `useAdvisor()` to open/close the panel. The panel is rendered once in `ClientLayout`, not per-page
 9. **Goals page layout** - Uses a sidebar+detail pattern (`GoalSidebar` + `GoalDetail`). Step status is derived client-side from `isCompleted`: first incomplete step = "active", rest = "pending". No `is_concurrent` DB column exists yet — all steps render sequentially
-10. **Placeholder task items** - `StepCard` renders 3 static placeholder tasks per step (not from DB). A future `goal_step_tasks` table is needed to make these real
+10. **Step tasks** - `goal_step_tasks` table stores user-created tasks per step (FK → `goal_steps.id`). `StepCard` manages task state locally after initial load — tasks are nested inside each step in the `getGoals` response. All CRUD is live: add (inline input), edit (click description), checkbox toggle (optimistic update), delete (confirmation modal). Progress bar always visible — updates dynamically as tasks are added or toggled. AI-created tasks are not yet implemented; all tasks are user-created. `PUT /tasks/[taskId]` is idempotent — always sends `{ description, isCompleted }` as full state; the route calls `toggleStepTask` or `updateStepTask` internally based on what changed
 
 ---
 

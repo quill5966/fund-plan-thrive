@@ -1,7 +1,12 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { ProgressBar } from "@/components/ui/ProgressBar";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
+import { ConfirmModal } from "@/components/ui/ConfirmModal";
+import { validateTaskDescription } from "@/lib/validation";
 
 type StepStatus = "done" | "active" | "pending";
 
@@ -11,6 +16,13 @@ interface Resource {
     url: string;
 }
 
+interface Task {
+    id: string;
+    description: string;
+    isCompleted: boolean;
+    sortOrder: number;
+}
+
 interface Step {
     id: string;
     description: string;
@@ -18,6 +30,7 @@ interface Step {
     isCompleted: boolean;
     isUserDefined: boolean;
     resources: Resource[];
+    tasks: Task[];
 }
 
 interface StepCardProps {
@@ -25,15 +38,11 @@ interface StepCardProps {
     status: StepStatus;
     expanded: boolean;
     onToggle: () => void;
+    goalId: string;
     compact?: boolean;
 }
 
-// Generic placeholder tasks per step — non-functional checkboxes
-const PLACEHOLDER_TASKS = [
-    "Research best approaches and options",
-    "Compare top alternatives and trade-offs",
-    "Create an action timeline",
-];
+// ─── Icons ────────────────────────────────────────────────────────────────────
 
 const ChevDownIcon = () => (
     <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -67,132 +76,396 @@ const CheckIcon = () => (
     </svg>
 );
 
-export default function StepCard({ step, status, expanded, onToggle, compact }: StepCardProps) {
+const TrashIcon = () => (
+    <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M2 3.5h10M5 3.5V2.5a.5.5 0 01.5-.5h3a.5.5 0 01.5.5v1M11.5 3.5l-.7 8a.5.5 0 01-.5.5H3.7a.5.5 0 01-.5-.5l-.7-8"/>
+    </svg>
+);
+
+// ─── Component ────────────────────────────────────────────────────────────────
+
+export default function StepCard({ step, status, expanded, onToggle, goalId, compact }: StepCardProps) {
     const accentBorder = status === "active" ? "var(--accent-border)" : "var(--border)";
 
+    // Task list — local state, seeded from props on mount
+    const [tasks, setTasks] = useState<Task[]>(step.tasks);
+
+    // Add-task input state
+    const [isAddingTask, setIsAddingTask]   = useState(false);
+    const [newTaskText, setNewTaskText]     = useState("");
+    const [newTaskError, setNewTaskError]   = useState<string | undefined>();
+    const [isSubmitting, setIsSubmitting]   = useState(false);
+
+    // Edit-task state
+    const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+    const [editText, setEditText]           = useState("");
+    const [editError, setEditError]         = useState<string | undefined>();
+    const [isSavingEdit, setIsSavingEdit]   = useState(false);
+
+    // Delete confirmation state
+    const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
+    const [isDeleting, setIsDeleting]         = useState(false);
+
+    // Progress calculation
+    const total     = tasks.length;
+    const completed = tasks.filter(t => t.isCompleted).length;
+    const pct       = total === 0 ? 0 : Math.round((completed / total) * 100);
+
+    const basePath = `/api/goals/${goalId}/steps/${step.id}/tasks`;
+
+    // ── Handlers ──────────────────────────────────────────────────────────────
+
+    async function handleAddTask() {
+        const validation = validateTaskDescription(newTaskText);
+        if (!validation.valid) { setNewTaskError(validation.error); return; }
+
+        setIsSubmitting(true);
+        try {
+            const res = await fetch(basePath, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ description: newTaskText }),
+            });
+            if (!res.ok) {
+                const data = await res.json();
+                setNewTaskError(data.error ?? "Failed to add task.");
+                return;
+            }
+            const { task } = await res.json();
+            setTasks(prev => [...prev, task]);
+            setNewTaskText("");
+            setIsAddingTask(false);
+            setNewTaskError(undefined);
+        } finally {
+            setIsSubmitting(false);
+        }
+    }
+
+    async function handleToggle(task: Task) {
+        // Optimistic update
+        setTasks(prev => prev.map(t => t.id === task.id ? { ...t, isCompleted: !t.isCompleted } : t));
+
+        const res = await fetch(`${basePath}/${task.id}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ description: task.description, isCompleted: !task.isCompleted }),
+        });
+
+        if (!res.ok) {
+            // Revert on error
+            setTasks(prev => prev.map(t => t.id === task.id ? { ...t, isCompleted: task.isCompleted } : t));
+        }
+    }
+
+    function startEdit(task: Task) {
+        setEditingTaskId(task.id);
+        setEditText(task.description);
+        setEditError(undefined);
+    }
+
+    function cancelEdit() {
+        setEditingTaskId(null);
+        setEditText("");
+        setEditError(undefined);
+    }
+
+    async function handleSaveEdit(task: Task) {
+        const validation = validateTaskDescription(editText);
+        if (!validation.valid) { setEditError(validation.error); return; }
+        if (editText.trim() === task.description) { cancelEdit(); return; }
+
+        setIsSavingEdit(true);
+        try {
+            const res = await fetch(`${basePath}/${task.id}`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ description: editText, isCompleted: task.isCompleted }),
+            });
+            if (!res.ok) {
+                const data = await res.json();
+                setEditError(data.error ?? "Failed to save.");
+                return;
+            }
+            const { task: updated } = await res.json();
+            setTasks(prev => prev.map(t => t.id === task.id ? updated : t));
+            cancelEdit();
+        } finally {
+            setIsSavingEdit(false);
+        }
+    }
+
+    async function handleDelete() {
+        if (!deleteTargetId) return;
+        setIsDeleting(true);
+        try {
+            const res = await fetch(`${basePath}/${deleteTargetId}`, { method: "DELETE" });
+            if (res.ok || res.status === 204) {
+                setTasks(prev => prev.filter(t => t.id !== deleteTargetId));
+            }
+        } finally {
+            setIsDeleting(false);
+            setDeleteTargetId(null);
+        }
+    }
+
+    // ── Render ────────────────────────────────────────────────────────────────
+
     return (
-        <div style={{
-            flex: 1,
-            background: "var(--bg-card)",
-            border: `1px solid ${accentBorder}`,
-            borderRadius: 10,
-            overflow: "hidden",
-        }}>
-            {/* Header */}
-            <div
-                onClick={onToggle}
-                style={{
-                    display: "flex", alignItems: "center", justifyContent: "space-between",
-                    padding: compact ? "8px 12px" : "10px 14px",
-                    cursor: "pointer",
-                }}
-            >
-                <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 0 }}>
-                    <span style={{
-                        fontSize: compact ? 12 : 13,
-                        fontWeight: 500,
-                        color: status === "done" ? "var(--text-ter)" : "var(--text)",
-                        textDecoration: status === "done" ? "line-through" : "none",
-                        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                    }}>
-                        {step.description}
-                    </span>
-                    {step.isUserDefined && (
-                        <span style={{ color: "var(--accent)", flexShrink: 0, opacity: 0.7 }} title="You mentioned this">
-                            <PinIcon />
+        <>
+            <ConfirmModal
+                isOpen={deleteTargetId !== null}
+                message="Delete this task? This cannot be undone."
+                confirmLabel={isDeleting ? "Deleting…" : "Delete"}
+                onConfirm={handleDelete}
+                onCancel={() => setDeleteTargetId(null)}
+            />
+
+            <div style={{
+                flex: 1,
+                background: "var(--bg-card)",
+                border: `1px solid ${accentBorder}`,
+                borderRadius: 10,
+                overflow: "hidden",
+            }}>
+                {/* Header */}
+                <div
+                    onClick={onToggle}
+                    style={{
+                        display: "flex", alignItems: "center", justifyContent: "space-between",
+                        padding: compact ? "8px 12px" : "10px 14px",
+                        cursor: "pointer",
+                    }}
+                >
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 0 }}>
+                        <span style={{
+                            fontSize: compact ? 12 : 13,
+                            fontWeight: 500,
+                            color: status === "done" ? "var(--text-ter)" : "var(--text)",
+                            textDecoration: status === "done" ? "line-through" : "none",
+                            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                        }}>
+                            {step.description}
                         </span>
-                    )}
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-                    <StatusBadge status={status} />
-                    <span style={{
-                        color: "var(--text-ter)",
-                        display: "flex",
-                        transform: expanded ? "rotate(180deg)" : "none",
-                        transition: "transform 0.2s",
-                    }}>
-                        <ChevDownIcon />
-                    </span>
-                </div>
-            </div>
-
-            {/* Expanded body */}
-            {expanded && (
-                <div style={{
-                    borderTop: "1px solid var(--border)",
-                    padding: compact ? "10px 12px" : "12px 14px",
-                    display: "flex", flexDirection: "column", gap: 12,
-                }}>
-                    {/* Placeholder tasks */}
-                    <div>
-                        <div style={{
-                            fontSize: 10, color: "var(--text-ter)",
-                            textTransform: "uppercase", letterSpacing: "0.05em",
-                            marginBottom: 8, fontWeight: 600,
-                        }}>Tasks</div>
-                        {PLACEHOLDER_TASKS.map((task, i) => (
-                            <div key={i} style={{
-                                display: "flex", alignItems: "center", gap: 8,
-                                padding: "5px 0",
-                                borderBottom: i < PLACEHOLDER_TASKS.length - 1 ? "1px solid var(--border)" : "none",
-                            }}>
-                                <div style={{
-                                    width: 16, height: 16, borderRadius: 4, flexShrink: 0,
-                                    border: "1.5px solid var(--border-light)",
-                                    background: "transparent",
-                                    display: "flex", alignItems: "center", justifyContent: "center",
-                                    cursor: "default",
-                                }}/>
-                                <span style={{ fontSize: compact ? 11 : 12, color: "var(--text-sec)" }}>{task}</span>
-                            </div>
-                        ))}
+                        {step.isUserDefined && (
+                            <span style={{ color: "var(--accent)", flexShrink: 0, opacity: 0.7 }} title="You mentioned this">
+                                <PinIcon />
+                            </span>
+                        )}
                     </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                        <StatusBadge status={status} />
+                        <span style={{
+                            color: "var(--text-ter)",
+                            display: "flex",
+                            transform: expanded ? "rotate(180deg)" : "none",
+                            transition: "transform 0.2s",
+                        }}>
+                            <ChevDownIcon />
+                        </span>
+                    </div>
+                </div>
 
-                    {/* Resources */}
-                    {step.resources.length > 0 ? (
+                {/* Expanded body */}
+                {expanded && (
+                    <div style={{
+                        borderTop: "1px solid var(--border)",
+                        padding: compact ? "10px 12px" : "12px 14px",
+                        display: "flex", flexDirection: "column", gap: 12,
+                    }}>
+                        {/* Tasks section */}
                         <div>
-                            <div style={{
-                                fontSize: 10, color: "var(--accent)",
-                                display: "flex", alignItems: "center", gap: 4,
-                                marginBottom: 6,
-                            }}>
-                                <SparkleIcon />
-                                {step.resources.length} resource{step.resources.length !== 1 ? "s" : ""} from your advisor
-                            </div>
-                            <div style={{
-                                background: "var(--bg-surface)",
-                                borderRadius: 8, padding: "8px 10px",
-                                display: "flex", flexDirection: "column", gap: 5,
-                            }}>
-                                {step.resources.map((r) => (
-                                    <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                                        <span style={{ color: "var(--accent)", flexShrink: 0 }}><LinkIcon /></span>
-                                        <a
-                                            href={r.url}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            style={{ fontSize: 12, color: "var(--blue)", textDecoration: "none" }}
-                                        >
-                                            {r.title}
-                                        </a>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    ) : (
-                        <div>
+                            {/* Section header */}
                             <div style={{
                                 fontSize: 10, color: "var(--text-ter)",
-                                display: "flex", alignItems: "center", gap: 4,
-                                marginBottom: 6,
-                            }}>
-                                <SparkleIcon />
-                                Curating resources for this step…
+                                textTransform: "uppercase", letterSpacing: "0.05em",
+                                marginBottom: 8, fontWeight: 600,
+                            }}>Tasks</div>
+
+                            {/* Progress bar — always visible */}
+                            <div style={{ marginBottom: 8 }}>
+                                <ProgressBar percentage={pct} />
+                                <div style={{
+                                    fontSize: 10, color: "var(--text-ter)",
+                                    marginTop: 3,
+                                }}>
+                                    {pct}% complete · {completed}/{total} tasks
+                                </div>
                             </div>
+
+                            {/* Task rows */}
+                            {tasks.map((task) => (
+                                <div key={task.id} style={{
+                                    borderBottom: "1px solid var(--border)",
+                                    paddingBottom: 6, marginBottom: 6,
+                                }}>
+                                    {editingTaskId === task.id ? (
+                                        /* Edit mode */
+                                        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                                            <Input
+                                                value={editText}
+                                                onChange={(e) => { setEditText(e.target.value); setEditError(undefined); }}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === "Enter") handleSaveEdit(task);
+                                                    if (e.key === "Escape") cancelEdit();
+                                                }}
+                                                error={editError}
+                                                maxLength={300}
+                                                autoFocus
+                                            />
+                                            <div style={{ display: "flex", gap: 6 }}>
+                                                <Button size="sm" onClick={() => handleSaveEdit(task)} disabled={isSavingEdit} loading={isSavingEdit}>
+                                                    Save
+                                                </Button>
+                                                <Button size="sm" variant="ghost" onClick={cancelEdit}>
+                                                    Cancel
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        /* Default row */
+                                        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "3px 0" }}>
+                                            {/* Checkbox */}
+                                            <div
+                                                onClick={() => handleToggle(task)}
+                                                style={{
+                                                    width: 16, height: 16, borderRadius: 4, flexShrink: 0,
+                                                    border: task.isCompleted ? "none" : "1.5px solid var(--border-light)",
+                                                    background: task.isCompleted ? "var(--accent)" : "transparent",
+                                                    display: "flex", alignItems: "center", justifyContent: "center",
+                                                    cursor: "pointer", transition: "background 0.15s",
+                                                }}
+                                            >
+                                                {task.isCompleted && <CheckIcon />}
+                                            </div>
+
+                                            {/* Description — click to edit */}
+                                            <span
+                                                onClick={() => startEdit(task)}
+                                                title="Click to edit"
+                                                style={{
+                                                    flex: 1,
+                                                    fontSize: compact ? 11 : 12,
+                                                    color: task.isCompleted ? "var(--text-ter)" : "var(--text-sec)",
+                                                    textDecoration: task.isCompleted ? "line-through" : "none",
+                                                    cursor: "text",
+                                                    wordBreak: "break-word",
+                                                }}
+                                            >
+                                                {task.description}
+                                            </span>
+
+                                            {/* Trash button */}
+                                            <button
+                                                onClick={() => setDeleteTargetId(task.id)}
+                                                title="Delete task"
+                                                style={{
+                                                    background: "none", border: "none", padding: 2,
+                                                    color: "var(--text-ter)", cursor: "pointer", flexShrink: 0,
+                                                    display: "flex", alignItems: "center",
+                                                    opacity: 0.6, transition: "opacity 0.15s",
+                                                }}
+                                                onMouseEnter={e => (e.currentTarget.style.opacity = "1")}
+                                                onMouseLeave={e => (e.currentTarget.style.opacity = "0.6")}
+                                            >
+                                                <TrashIcon />
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+
+                            {/* Add Task */}
+                            {isAddingTask ? (
+                                <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 4 }}>
+                                    <Input
+                                        value={newTaskText}
+                                        onChange={(e) => { setNewTaskText(e.target.value); setNewTaskError(undefined); }}
+                                        onKeyDown={(e) => {
+                                            if (e.key === "Enter") handleAddTask();
+                                            if (e.key === "Escape") { setIsAddingTask(false); setNewTaskText(""); setNewTaskError(undefined); }
+                                        }}
+                                        placeholder="Add an item"
+                                        error={newTaskError}
+                                        maxLength={300}
+                                        autoFocus
+                                    />
+                                    <div style={{ display: "flex", gap: 6 }}>
+                                        <Button size="sm" onClick={handleAddTask} disabled={isSubmitting} loading={isSubmitting}>
+                                            Add
+                                        </Button>
+                                        <Button
+                                            size="sm"
+                                            variant="ghost"
+                                            onClick={() => { setIsAddingTask(false); setNewTaskText(""); setNewTaskError(undefined); }}
+                                        >
+                                            Cancel
+                                        </Button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <button
+                                    onClick={() => setIsAddingTask(true)}
+                                    style={{
+                                        display: "flex", alignItems: "center", gap: 5,
+                                        marginTop: tasks.length > 0 ? 4 : 0,
+                                        padding: "5px 8px", borderRadius: 6,
+                                        background: "var(--bg-surface)",
+                                        border: "1px solid var(--border)",
+                                        color: "var(--text-ter)", fontSize: compact ? 11 : 12,
+                                        cursor: "pointer", width: "fit-content",
+                                    }}
+                                >
+                                    + Add an item
+                                </button>
+                            )}
                         </div>
-                    )}
-                </div>
-            )}
-        </div>
+
+                        {/* Resources */}
+                        {step.resources.length > 0 ? (
+                            <div>
+                                <div style={{
+                                    fontSize: 10, color: "var(--accent)",
+                                    display: "flex", alignItems: "center", gap: 4,
+                                    marginBottom: 6,
+                                }}>
+                                    <SparkleIcon />
+                                    {step.resources.length} resource{step.resources.length !== 1 ? "s" : ""} from your advisor
+                                </div>
+                                <div style={{
+                                    background: "var(--bg-surface)",
+                                    borderRadius: 8, padding: "8px 10px",
+                                    display: "flex", flexDirection: "column", gap: 5,
+                                }}>
+                                    {step.resources.map((r) => (
+                                        <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                            <span style={{ color: "var(--accent)", flexShrink: 0 }}><LinkIcon /></span>
+                                            <a
+                                                href={r.url}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                style={{ fontSize: 12, color: "var(--blue)", textDecoration: "none" }}
+                                            >
+                                                {r.title}
+                                            </a>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        ) : (
+                            <div>
+                                <div style={{
+                                    fontSize: 10, color: "var(--text-ter)",
+                                    display: "flex", alignItems: "center", gap: 4,
+                                    marginBottom: 6,
+                                }}>
+                                    <SparkleIcon />
+                                    Curating resources for this step…
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
+            </div>
+        </>
     );
 }

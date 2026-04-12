@@ -7,6 +7,13 @@ interface Resource {
     url: string;
 }
 
+interface Task {
+    id: string;
+    description: string;
+    isCompleted: boolean;
+    sortOrder: number;
+}
+
 interface Step {
     id: string;
     description: string;
@@ -14,6 +21,7 @@ interface Step {
     isCompleted: boolean;
     isUserDefined: boolean;
     resources: Resource[];
+    tasks: Task[];
 }
 
 interface Goal {
@@ -132,7 +140,7 @@ export default function GoalDetail({ goal }: GoalDetailProps) {
             </div>
 
             {goal.steps.length > 0 ? (
-                <StepTimeline steps={goal.steps} />
+                <StepTimeline steps={goal.steps} goalId={goal.id} />
             ) : (
                 <div style={{
                     padding: "32px 0", textAlign: "center",

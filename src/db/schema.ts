@@ -104,6 +104,16 @@ export const goalSteps = pgTable("goal_steps", {
   intentExtractedAt: timestamp("intent_extracted_at"),
 });
 
+// Goal Step Tasks table
+export const goalStepTasks = pgTable("goal_step_tasks", {
+  id:          uuid("id").defaultRandom().primaryKey(),
+  stepId:      uuid("step_id").references(() => goalSteps.id).notNull(),
+  description: text("description").notNull(),
+  isCompleted: boolean("is_completed").default(false).notNull(),
+  sortOrder:   integer("sort_order").notNull().default(0),
+  createdAt:   timestamp("created_at").defaultNow().notNull(),
+});
+
 // Goal Resources table
 export const goalResources = pgTable("goal_resources", {
   id: uuid("id").defaultRandom().primaryKey(),

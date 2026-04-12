@@ -11,6 +11,13 @@ interface Resource {
     url: string;
 }
 
+interface Task {
+    id: string;
+    description: string;
+    isCompleted: boolean;
+    sortOrder: number;
+}
+
 interface Step {
     id: string;
     description: string;
@@ -18,6 +25,7 @@ interface Step {
     isCompleted: boolean;
     isUserDefined: boolean;
     resources: Resource[];
+    tasks: Task[];
 }
 
 interface Goal {

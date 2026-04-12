@@ -12,6 +12,13 @@ interface Resource {
     url: string;
 }
 
+interface Task {
+    id: string;
+    description: string;
+    isCompleted: boolean;
+    sortOrder: number;
+}
+
 interface Step {
     id: string;
     description: string;
@@ -19,10 +26,12 @@ interface Step {
     isCompleted: boolean;
     isUserDefined: boolean;
     resources: Resource[];
+    tasks: Task[];
 }
 
 interface StepTimelineProps {
     steps: Step[];
+    goalId: string;
 }
 
 function deriveStatus(steps: Step[], index: number): StepStatus {
@@ -33,7 +42,7 @@ function deriveStatus(steps: Step[], index: number): StepStatus {
     return "pending";
 }
 
-export default function StepTimeline({ steps }: StepTimelineProps) {
+export default function StepTimeline({ steps, goalId }: StepTimelineProps) {
     const sorted = [...steps].sort((a, b) => Number(a.order) - Number(b.order));
 
     // Auto-expand the active step
@@ -77,6 +86,7 @@ export default function StepTimeline({ steps }: StepTimelineProps) {
                             status={status}
                             expanded={isExpanded}
                             onToggle={() => toggle(step.id)}
+                            goalId={goalId}
                         />
                     </div>
                 );

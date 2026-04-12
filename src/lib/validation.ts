@@ -131,6 +131,39 @@ export function validateSteps(steps: { description: string }[]): ValidationResul
     return { valid: true };
 }
 
+const MIN_TASK_LENGTH = 3;
+const MAX_TASK_LENGTH = 300;
+
+/**
+ * Validates a user-entered task description.
+ * Rejects tasks that are too short/long, contain HTML/script injection,
+ * repeated-char artifacts, or unsupported characters.
+ */
+export function validateTaskDescription(text: string): ValidationResult {
+    const trimmed = text.trim();
+
+    if (trimmed.length === 0) {
+        return { valid: false, error: "Task cannot be empty." };
+    }
+    if (trimmed.length < MIN_TASK_LENGTH) {
+        return { valid: false, error: `Task must be at least ${MIN_TASK_LENGTH} characters.` };
+    }
+    if (trimmed.length > MAX_TASK_LENGTH) {
+        return { valid: false, error: `Task must be ${MAX_TASK_LENGTH} characters or fewer.` };
+    }
+    if (HTML_PATTERN.test(trimmed)) {
+        return { valid: false, error: "Task contains invalid content (HTML or script)." };
+    }
+    if (REPEATED_CHAR_PATTERN.test(trimmed)) {
+        return { valid: false, error: "Invalid input." };
+    }
+    if (!STEP_PATTERN.test(trimmed)) {
+        return { valid: false, error: "Task contains unsupported characters." };
+    }
+
+    return { valid: true };
+}
+
 /**
  * Validates all parameters for an asset/debt tool call.
  * Returns the first validation error found, or { valid: true }.

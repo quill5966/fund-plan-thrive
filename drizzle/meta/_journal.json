@@ -15,6 +15,13 @@
       "when": 1767556874170,
       "tag": "0001_yellow_wind_dancer",
       "breakpoints": true
-    }
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1776008219069,
+      "tag": "0002_absurd_wallflower",
+      "breakpoints": true
+    },
   ]
 }

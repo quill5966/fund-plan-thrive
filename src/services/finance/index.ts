@@ -1,6 +1,6 @@
 import { db } from "@/db";
-import { assets, debts, assetsHistory, debtsHistory, goals, goalSteps, goalResources } from "@/db/schema";
-import { eq, sql, and, desc } from "drizzle-orm";
+import { assets, debts, assetsHistory, debtsHistory, goals, goalSteps, goalResources, goalStepTasks } from "@/db/schema";
+import { eq, sql, and, max, desc } from "drizzle-orm";
 import { distance } from "fastest-levenshtein";
 
 // Similarity threshold for goal deduplication (0-1 scale, where 1 = exact match)
@@ -488,11 +488,6 @@ export const financeService = {
     },
 
     async getGoals(userId: string) {
-        // Fetch goals, steps, resources
-        // For simplicity in this prototype, we'll fetch goals and then fetch steps/resources for each or do a big join.
-        // Drizzle's query builder with `with` (relational query features) would be nice, but we are using core method.
-        // Let's just fetch flat and restructure, or simple loops.
-
         const userGoals = await db.select().from(goals).where(eq(goals.userId, userId));
 
         const results = [];
@@ -501,17 +496,93 @@ export const financeService = {
                 .select()
                 .from(goalSteps)
                 .where(eq(goalSteps.goalId, g.id))
-                // .orderBy(goalSteps.order) // order is text, might sort "10" before "2". But for <10 steps it's fine.
-                // Fixing sort:
                 .orderBy(sql`cast(${goalSteps.order} as integer)`);
 
-            const stepsWithResources = [];
+            const stepsWithData = [];
             for (const s of steps) {
                 const resources = await db.select().from(goalResources).where(eq(goalResources.stepId, s.id));
-                stepsWithResources.push({ ...s, resources });
+                const tasks = await db
+                    .select()
+                    .from(goalStepTasks)
+                    .where(eq(goalStepTasks.stepId, s.id))
+                    .orderBy(goalStepTasks.sortOrder);
+                stepsWithData.push({ ...s, resources, tasks });
             }
-            results.push({ ...g, steps: stepsWithResources });
+            results.push({ ...g, steps: stepsWithData });
         }
         return results;
-    }
+    },
+
+    // ─── Task CRUD ─────────────────────────────────────────────────────────────
+
+    async getTasksForStep(stepId: string, userId: string) {
+        await verifyStepOwnership(stepId, userId);
+        return db
+            .select()
+            .from(goalStepTasks)
+            .where(eq(goalStepTasks.stepId, stepId))
+            .orderBy(goalStepTasks.sortOrder);
+    },
+
+    async createStepTask(stepId: string, userId: string, description: string) {
+        await verifyStepOwnership(stepId, userId);
+
+        const maxOrderResult = await db
+            .select({ maxOrder: max(goalStepTasks.sortOrder) })
+            .from(goalStepTasks)
+            .where(eq(goalStepTasks.stepId, stepId));
+        const nextOrder = (maxOrderResult[0].maxOrder ?? -1) + 1;
+
+        const [task] = await db
+            .insert(goalStepTasks)
+            .values({ stepId, description: description.trim(), sortOrder: nextOrder })
+            .returning();
+        return task;
+    },
+
+    async toggleStepTask(taskId: string, userId: string) {
+        const task = await verifyTaskOwnership(taskId, userId);
+        const [updated] = await db
+            .update(goalStepTasks)
+            .set({ isCompleted: !task.isCompleted })
+            .where(eq(goalStepTasks.id, taskId))
+            .returning();
+        return updated;
+    },
+
+    async updateStepTask(taskId: string, userId: string, description: string) {
+        await verifyTaskOwnership(taskId, userId);
+        const [updated] = await db
+            .update(goalStepTasks)
+            .set({ description: description.trim() })
+            .where(eq(goalStepTasks.id, taskId))
+            .returning();
+        return updated;
+    },
+
+    async deleteStepTask(taskId: string, userId: string) {
+        await verifyTaskOwnership(taskId, userId);
+        await db.delete(goalStepTasks).where(eq(goalStepTasks.id, taskId));
+    },
 };
+
+// ─── Ownership helpers (private) ───────────────────────────────────────────────
+
+async function verifyStepOwnership(stepId: string, userId: string) {
+    const [step] = await db.select().from(goalSteps).where(eq(goalSteps.id, stepId)).limit(1);
+    if (!step) throw new Error("Step not found");
+    const [goal] = await db
+        .select()
+        .from(goals)
+        .where(and(eq(goals.id, step.goalId), eq(goals.userId, userId)))
+        .limit(1);
+    if (!goal) throw new Error("Unauthorized");
+    return step;
+}
+
+async function verifyTaskOwnership(taskId: string, userId: string) {
+    const [task] = await db.select().from(goalStepTasks).where(eq(goalStepTasks.id, taskId)).limit(1);
+    if (!task) throw new Error("Task not found");
+    await verifyStepOwnership(task.stepId, userId);
+    return task;
+}
