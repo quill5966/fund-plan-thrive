@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { X, Mic, Send, Square } from "lucide-react";
 import { useAdvisor } from "./AdvisorContext";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useVoiceRecorder } from "@/hooks/useVoiceRecorder";
 import NudgeCard from "./NudgeCard";
 
@@ -29,6 +29,7 @@ export function AdvisorPanel() {
     // ── All hooks called unconditionally (React rules of hooks) ──
     const { isOpen, close } = useAdvisor();
     const pathname = usePathname();
+    const router = useRouter();
     const [messages, setMessages] = useState<Message[]>([]);
     const [inputText, setInputText] = useState("");
     const [isLoading, setIsLoading] = useState(false);
@@ -150,6 +151,7 @@ export function AdvisorPanel() {
                     content: fullContent,
                 }]);
                 setStreamingContent("");
+                router.refresh();
             }
         } catch (error) {
             console.error("Error:", error);
@@ -161,7 +163,7 @@ export function AdvisorPanel() {
         } finally {
             setIsLoading(false);
         }
-    }, [conversationId]);
+    }, [conversationId, router]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
