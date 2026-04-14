@@ -83,3 +83,61 @@ textarea::placeholder {
   font-feature-settings: 'tnum' 1;
   font-weight: 600;
 }
+
+/* ===== Chat Markdown Rendering ===== */
+.message-markdown p {
+  margin: 0;
+}
+
+.message-markdown p + p {
+  margin-top: 0.5rem;
+}
+
+.message-markdown strong {
+  font-weight: 600;
+  color: inherit;
+}
+
+.message-markdown ol,
+.message-markdown ul {
+  margin: 0.5rem 0;
+  padding-left: 1.25rem;
+}
+
+.message-markdown ol {
+  list-style-type: decimal;
+}
+
+.message-markdown ul {
+  list-style-type: disc;
+}
+
+.message-markdown li {
+  margin: 0.35rem 0;
+}
+
+.message-markdown li > p {
+  margin: 0;
+  display: inline;
+}
+
+.message-markdown code {
+  font-family: var(--font-jetbrains-mono), monospace;
+  font-size: 0.85em;
+  padding: 0.15em 0.35em;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.message-markdown pre {
+  margin: 0.5rem 0;
+  padding: 0.75rem;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.3);
+  overflow-x: auto;
+}
+
+.message-markdown pre code {
+  padding: 0;
+  background: transparent;
+}

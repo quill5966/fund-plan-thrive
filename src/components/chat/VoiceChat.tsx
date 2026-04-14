@@ -4,6 +4,7 @@ import React, { useState, useRef, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useVoiceRecorder } from "@/hooks/useVoiceRecorder";
 import { Mic, Send, Square } from "lucide-react";
+import { MessageContent } from "./MessageContent";
 
 interface Message {
     id: string;
@@ -246,7 +247,9 @@ export function VoiceChat({ userName, onDataExtracted, initialMessages = [], ini
                                 borderBottomLeftRadius: message.role === "assistant" ? 6 : undefined,
                             }}
                         >
-                            <p className="whitespace-pre-wrap text-sm leading-relaxed">{message.content}</p>
+                            <div className="text-sm leading-relaxed">
+                                <MessageContent content={message.content} isUser={message.role === "user"} />
+                            </div>
                         </div>
                     </div>
                 ))}
@@ -263,7 +266,9 @@ export function VoiceChat({ userName, onDataExtracted, initialMessages = [], ini
                                 borderBottomLeftRadius: 6,
                             }}
                         >
-                            <p className="whitespace-pre-wrap text-sm leading-relaxed">{streamingContent}</p>
+                            <div className="text-sm leading-relaxed">
+                                <MessageContent content={streamingContent} isUser={false} />
+                            </div>
                             <span
                                 className="inline-block w-0.5 h-4 animate-pulse ml-1"
                                 style={{ background: "var(--accent)" }}

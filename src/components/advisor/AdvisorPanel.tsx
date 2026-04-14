@@ -6,6 +6,7 @@ import { useAdvisor } from "./AdvisorContext";
 import { usePathname, useRouter } from "next/navigation";
 import { useVoiceRecorder } from "@/hooks/useVoiceRecorder";
 import NudgeCard from "./NudgeCard";
+import { MessageContent } from "@/components/chat/MessageContent";
 
 interface Message {
     id: string;
@@ -240,7 +241,7 @@ export function AdvisorPanel() {
                             color: m.role === "user" ? "#fff" : "var(--text)",
                         }}
                     >
-                        {m.content}
+                        <MessageContent content={m.content} isUser={m.role === "user"} />
                     </div>
                 ))}
 
@@ -257,7 +258,7 @@ export function AdvisorPanel() {
                             color: "var(--text)",
                         }}
                     >
-                        {streamingContent}
+                        <MessageContent content={streamingContent} isUser={false} />
                         <span className="inline-block w-1.5 h-4 ml-1 animate-pulse" style={{ background: "var(--accent)" }} />
                     </div>
                 )}
