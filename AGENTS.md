@@ -169,6 +169,8 @@ Two-LLM pipeline for curating goal step resources.
 | `/api/conversation` | GET | Load existing session + conversation history |
 | `/api/init-conversation` | POST | Initialize conversation for new/returning users |
 | `/api/goals` | GET | Fetch all goals for current user (includes tasks nested under each step) |
+| `/api/goals/[goalId]/steps` | POST | Create a new step for a goal |
+| `/api/goals/[goalId]/steps/[stepId]` | PUT, DELETE | Update step description / delete step + children |
 | `/api/goals/[goalId]/steps/[stepId]/tasks` | GET, POST | List tasks for a step / create a new task |
 | `/api/goals/[goalId]/steps/[stepId]/tasks/[taskId]` | PUT, DELETE | Update task fields (description + isCompleted) / delete task |
 | `/api/session` | DELETE | Clear iron-session (logout) |

@@ -564,6 +564,67 @@ export const financeService = {
         await verifyTaskOwnership(taskId, userId);
         await db.delete(goalStepTasks).where(eq(goalStepTasks.id, taskId));
     },
+
+    // ─── Step CRUD ──────────────────────────────────────────────────────────────
+
+    async createStep(goalId: string, userId: string, description: string) {
+        // Validate goal ownership
+        const [goal] = await db.select().from(goals)
+            .where(and(eq(goals.id, goalId), eq(goals.userId, userId)))
+            .limit(1);
+        if (!goal) throw new Error("Goal not found");
+
+        // Get current max order
+        const existingSteps = await db.select().from(goalSteps)
+            .where(eq(goalSteps.goalId, goalId));
+        const nextOrder = existingSteps.length + 1;
+
+        const [step] = await db.insert(goalSteps).values({
+            goalId,
+            description: description.trim(),
+            order: `${nextOrder}`,
+            isCompleted: false,
+            isUserDefined: true,
+        }).returning();
+
+        // Return with empty resources and tasks for consistency with getGoals shape
+        return { ...step, resources: [], tasks: [] };
+    },
+
+    async updateStep(stepId: string, userId: string, description: string) {
+        await verifyStepOwnership(stepId, userId);
+        const [updated] = await db.update(goalSteps)
+            .set({ description: description.trim() })
+            .where(eq(goalSteps.id, stepId))
+            .returning();
+        return updated;
+    },
+
+    async deleteStep(stepId: string, userId: string) {
+        await verifyStepOwnership(stepId, userId);
+
+        // Get step to know its goalId for reordering
+        const [step] = await db.select().from(goalSteps)
+            .where(eq(goalSteps.id, stepId)).limit(1);
+
+        await db.transaction(async (tx) => {
+            // Cascade delete: tasks, resources, then step
+            await tx.delete(goalStepTasks).where(eq(goalStepTasks.stepId, stepId));
+            await tx.delete(goalResources).where(eq(goalResources.stepId, stepId));
+            await tx.delete(goalSteps).where(eq(goalSteps.id, stepId));
+
+            // Reorder remaining steps to keep order sequential
+            const remaining = await tx.select().from(goalSteps)
+                .where(eq(goalSteps.goalId, step.goalId))
+                .orderBy(sql`cast(${goalSteps.order} as integer)`);
+
+            for (let i = 0; i < remaining.length; i++) {
+                await tx.update(goalSteps)
+                    .set({ order: `${i + 1}` })
+                    .where(eq(goalSteps.id, remaining[i].id));
+            }
+        });
+    },
 };
 
 // ─── Ownership helpers (private) ───────────────────────────────────────────────

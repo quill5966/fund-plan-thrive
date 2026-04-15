@@ -32,6 +32,8 @@ interface Step {
 interface StepTimelineProps {
     steps: Step[];
     goalId: string;
+    onStepUpdate: (stepId: string, description: string) => void;
+    onStepDelete: (stepId: string) => void;
 }
 
 function deriveStatus(steps: Step[], index: number): StepStatus {
@@ -42,7 +44,7 @@ function deriveStatus(steps: Step[], index: number): StepStatus {
     return "pending";
 }
 
-export default function StepTimeline({ steps, goalId }: StepTimelineProps) {
+export default function StepTimeline({ steps, goalId, onStepUpdate, onStepDelete }: StepTimelineProps) {
     const sorted = [...steps].sort((a, b) => Number(a.order) - Number(b.order));
 
     // Auto-expand the active step
@@ -87,6 +89,8 @@ export default function StepTimeline({ steps, goalId }: StepTimelineProps) {
                             expanded={isExpanded}
                             onToggle={() => toggle(step.id)}
                             goalId={goalId}
+                            onStepUpdate={onStepUpdate}
+                            onStepDelete={onStepDelete}
                         />
                     </div>
                 );

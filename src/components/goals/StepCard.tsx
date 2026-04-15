@@ -6,7 +6,7 @@ import { ProgressBar } from "@/components/ui/ProgressBar";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
-import { validateTaskDescription } from "@/lib/validation";
+import { validateTaskDescription, validateStep } from "@/lib/validation";
 
 type StepStatus = "done" | "active" | "pending";
 
@@ -40,6 +40,8 @@ interface StepCardProps {
     onToggle: () => void;
     goalId: string;
     compact?: boolean;
+    onStepUpdate: (stepId: string, description: string) => void;
+    onStepDelete: (stepId: string) => void;
 }
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
@@ -82,9 +84,15 @@ const TrashIcon = () => (
     </svg>
 );
 
+const PencilIcon = () => (
+    <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M10 2l2 2-8 8H2v-2l8-8z"/>
+    </svg>
+);
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function StepCard({ step, status, expanded, onToggle, goalId, compact }: StepCardProps) {
+export default function StepCard({ step, status, expanded, onToggle, goalId, compact, onStepUpdate, onStepDelete }: StepCardProps) {
     const accentBorder = status === "active" ? "var(--accent-border)" : "var(--border)";
 
     // Task list — local state, seeded from props on mount
@@ -102,9 +110,19 @@ export default function StepCard({ step, status, expanded, onToggle, goalId, com
     const [editError, setEditError]         = useState<string | undefined>();
     const [isSavingEdit, setIsSavingEdit]   = useState(false);
 
-    // Delete confirmation state
+    // Delete confirmation state (tasks)
     const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
     const [isDeleting, setIsDeleting]         = useState(false);
+
+    // Step edit state
+    const [isEditingStep, setIsEditingStep]     = useState(false);
+    const [stepEditText, setStepEditText]       = useState(step.description);
+    const [stepEditError, setStepEditError]     = useState<string | undefined>();
+    const [isSavingStep, setIsSavingStep]       = useState(false);
+
+    // Step delete confirmation state
+    const [showStepDelete, setShowStepDelete]   = useState(false);
+    const [isDeletingStep, setIsDeletingStep]   = useState(false);
 
     // Progress calculation
     const total     = tasks.length;
@@ -208,6 +226,58 @@ export default function StepCard({ step, status, expanded, onToggle, goalId, com
         }
     }
 
+    // ── Step-level handlers ────────────────────────────────────────────────────
+
+    function startStepEdit(e: React.MouseEvent) {
+        e.stopPropagation();
+        setIsEditingStep(true);
+        setStepEditText(step.description);
+        setStepEditError(undefined);
+    }
+
+    function cancelStepEdit() {
+        setIsEditingStep(false);
+        setStepEditText(step.description);
+        setStepEditError(undefined);
+    }
+
+    async function handleStepSave() {
+        const validation = validateStep(stepEditText);
+        if (!validation.valid) { setStepEditError(validation.error); return; }
+        if (stepEditText.trim() === step.description) { cancelStepEdit(); return; }
+
+        setIsSavingStep(true);
+        try {
+            const res = await fetch(`/api/goals/${goalId}/steps/${step.id}`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ description: stepEditText }),
+            });
+            if (!res.ok) {
+                const data = await res.json();
+                setStepEditError(data.error ?? "Failed to save.");
+                return;
+            }
+            onStepUpdate(step.id, stepEditText.trim());
+            cancelStepEdit();
+        } finally {
+            setIsSavingStep(false);
+        }
+    }
+
+    async function handleStepDelete() {
+        setIsDeletingStep(true);
+        try {
+            const res = await fetch(`/api/goals/${goalId}/steps/${step.id}`, { method: "DELETE" });
+            if (res.ok || res.status === 204) {
+                onStepDelete(step.id);
+            }
+        } finally {
+            setIsDeletingStep(false);
+            setShowStepDelete(false);
+        }
+    }
+
     // ── Render ────────────────────────────────────────────────────────────────
 
     return (
@@ -220,6 +290,14 @@ export default function StepCard({ step, status, expanded, onToggle, goalId, com
                 onCancel={() => setDeleteTargetId(null)}
             />
 
+            <ConfirmModal
+                isOpen={showStepDelete}
+                message="Delete this step? All tasks and resources in this step will also be deleted. This cannot be undone."
+                confirmLabel={isDeletingStep ? "Deleting…" : "Delete"}
+                onConfirm={handleStepDelete}
+                onCancel={() => setShowStepDelete(false)}
+            />
+
             <div style={{
                 flex: 1,
                 background: "var(--bg-card)",
@@ -229,40 +307,98 @@ export default function StepCard({ step, status, expanded, onToggle, goalId, com
             }}>
                 {/* Header */}
                 <div
-                    onClick={onToggle}
+                    onClick={isEditingStep ? undefined : onToggle}
                     style={{
                         display: "flex", alignItems: "center", justifyContent: "space-between",
                         padding: compact ? "8px 12px" : "10px 14px",
-                        cursor: "pointer",
+                        cursor: isEditingStep ? "default" : "pointer",
                     }}
                 >
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 0 }}>
-                        <span style={{
-                            fontSize: compact ? 12 : 13,
-                            fontWeight: 500,
-                            color: status === "done" ? "var(--text-ter)" : "var(--text)",
-                            textDecoration: status === "done" ? "line-through" : "none",
-                            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                        }}>
-                            {step.description}
-                        </span>
-                        {step.isUserDefined && (
-                            <span style={{ color: "var(--accent)", flexShrink: 0, opacity: 0.7 }} title="You mentioned this">
-                                <PinIcon />
-                            </span>
-                        )}
-                    </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-                        <StatusBadge status={status} />
-                        <span style={{
-                            color: "var(--text-ter)",
-                            display: "flex",
-                            transform: expanded ? "rotate(180deg)" : "none",
-                            transition: "transform 0.2s",
-                        }}>
-                            <ChevDownIcon />
-                        </span>
-                    </div>
+                    {isEditingStep ? (
+                        /* Step edit mode */
+                        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 6 }} onClick={e => e.stopPropagation()}>
+                            <Input
+                                value={stepEditText}
+                                onChange={(e) => { setStepEditText(e.target.value); setStepEditError(undefined); }}
+                                onKeyDown={(e) => {
+                                    if (e.key === "Enter") handleStepSave();
+                                    if (e.key === "Escape") cancelStepEdit();
+                                }}
+                                error={stepEditError}
+                                maxLength={300}
+                                autoFocus
+                            />
+                            <div style={{ display: "flex", gap: 6 }}>
+                                <Button size="sm" onClick={handleStepSave} disabled={isSavingStep} loading={isSavingStep}>
+                                    Save
+                                </Button>
+                                <Button size="sm" variant="ghost" onClick={cancelStepEdit}>
+                                    Cancel
+                                </Button>
+                            </div>
+                        </div>
+                    ) : (
+                        /* Default header */
+                        <>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 0 }}>
+                                <span style={{
+                                    fontSize: compact ? 12 : 13,
+                                    fontWeight: 500,
+                                    color: status === "done" ? "var(--text-ter)" : "var(--text)",
+                                    textDecoration: status === "done" ? "line-through" : "none",
+                                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                                }}>
+                                    {step.description}
+                                </span>
+                                {step.isUserDefined && (
+                                    <span style={{ color: "var(--accent)", flexShrink: 0, opacity: 0.7 }} title="You added this">
+                                        <PinIcon />
+                                    </span>
+                                )}
+                            </div>
+                            <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+                                <StatusBadge status={status} />
+                                {/* Edit step button */}
+                                <button
+                                    onClick={startStepEdit}
+                                    title="Edit step"
+                                    style={{
+                                        background: "none", border: "none", padding: 3,
+                                        color: "var(--text-ter)", cursor: "pointer",
+                                        display: "flex", alignItems: "center",
+                                        opacity: 0.5, transition: "opacity 0.15s",
+                                    }}
+                                    onMouseEnter={e => (e.currentTarget.style.opacity = "1")}
+                                    onMouseLeave={e => (e.currentTarget.style.opacity = "0.5")}
+                                >
+                                    <PencilIcon />
+                                </button>
+                                {/* Delete step button */}
+                                <button
+                                    onClick={(e) => { e.stopPropagation(); setShowStepDelete(true); }}
+                                    title="Delete step"
+                                    style={{
+                                        background: "none", border: "none", padding: 3,
+                                        color: "var(--text-ter)", cursor: "pointer",
+                                        display: "flex", alignItems: "center",
+                                        opacity: 0.5, transition: "opacity 0.15s",
+                                    }}
+                                    onMouseEnter={e => (e.currentTarget.style.opacity = "1")}
+                                    onMouseLeave={e => (e.currentTarget.style.opacity = "0.5")}
+                                >
+                                    <TrashIcon />
+                                </button>
+                                <span style={{
+                                    color: "var(--text-ter)",
+                                    display: "flex",
+                                    transform: expanded ? "rotate(180deg)" : "none",
+                                    transition: "transform 0.2s",
+                                }}>
+                                    <ChevDownIcon />
+                                </span>
+                            </div>
+                        </>
+                    )}
                 </div>
 
                 {/* Expanded body */}
@@ -384,7 +520,7 @@ export default function StepCard({ step, status, expanded, onToggle, goalId, com
                                             if (e.key === "Enter") handleAddTask();
                                             if (e.key === "Escape") { setIsAddingTask(false); setNewTaskText(""); setNewTaskError(undefined); }
                                         }}
-                                        placeholder="Add an item"
+                                        placeholder="Add a task"
                                         error={newTaskError}
                                         maxLength={300}
                                         autoFocus
@@ -408,14 +544,14 @@ export default function StepCard({ step, status, expanded, onToggle, goalId, com
                                     style={{
                                         display: "flex", alignItems: "center", gap: 5,
                                         marginTop: tasks.length > 0 ? 4 : 0,
-                                        padding: "5px 8px", borderRadius: 6,
-                                        background: "var(--bg-surface)",
+                                        padding: "5px 12px", borderRadius: 6,
                                         border: "1px solid var(--border)",
-                                        color: "var(--text-ter)", fontSize: compact ? 11 : 12,
+                                        background: "var(--bg-surface)",
+                                        color: "var(--text-sec)", fontSize: 12,
                                         cursor: "pointer", width: "fit-content",
                                     }}
                                 >
-                                    + Add an item
+                                    + Add task
                                 </button>
                             )}
                         </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 
 interface UseVoiceRecorderReturn {
     isRecording: boolean;
@@ -32,11 +32,16 @@ export function useVoiceRecorder(): UseVoiceRecorderReturn {
     const chunksRef = useRef<Blob[]>([]);
     const streamRef = useRef<MediaStream | null>(null);
 
-    // Check if MediaRecorder is supported
-    const isSupported = typeof window !== "undefined" &&
-        "MediaRecorder" in window &&
-        "navigator" in window &&
-        "mediaDevices" in navigator;
+    // Check if MediaRecorder is supported — deferred to avoid SSR hydration mismatch
+    const [isSupported, setIsSupported] = useState(false);
+    useEffect(() => {
+        setIsSupported(
+            typeof window !== "undefined" &&
+            "MediaRecorder" in window &&
+            "navigator" in window &&
+            "mediaDevices" in navigator
+        );
+    }, []);
 
     const startRecording = useCallback(async () => {
         if (!isSupported) {
