@@ -116,19 +116,19 @@ All tables defined in `src/db/schema.ts`:
 
 ## Core Services
 
-### 1. Advisor Service (`src/services/advisor/index.ts`)
-The "brain" - orchestrates LLM interactions and tool calling.
+### 1. Chat Route (`src/app/api/chat/route.ts`)
+The "brain" — streaming LLM endpoint for the advisor panel and home page chat. Handles text and audio input, tool calling, and conversation persistence.
 
-**Key Function**: `processTranscription(userId, text) → AdvisorResult`
+**Key Flow**: User message → Whisper transcription (if audio) → Load conversation history + financial context → `streamText` with tools → Stream response to client
 
 **Tools Exposed to LLM**:
 - `update_asset` - Create/update asset with type, name, amount, effectiveDate
 - `update_debt` - Create/update debt with same structure
-- `close_account` - Mark asset/debt as inactive
 - `create_goal` - Create goal with steps (marks `isUserDefined` for user-mentioned steps)
-- `update_goal` - Update progress, status, add new steps
-
-**Flow**: Transcription → System prompt with current financial context → LLM generates tool calls → Execute tools → Return response
+- `update_goal` - Update goal progress (currentAmount) or status only
+- `add_goal_step` - Add a step to an existing goal (with `isUserDefined` attribution)
+- `update_goal_step` - Update an existing step's description
+- `delete_goal_step` - Delete a step and cascade-remove its tasks + resources
 
 ### 2. Finance Service (`src/services/finance/index.ts`)
 Deterministic CRUD operations - the "ledger".

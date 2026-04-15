@@ -66,8 +66,10 @@ export async function GET(
 
         // Fetch all resources for each step
         const resourcesByStep: ResourcesByStep = {};
-        let totalSteps = steps.length;
         let stepsWithResources = 0;
+        // Only steps that went through the curation pipeline (intentExtractedAt is set)
+        // are expected to have resources. Manually added steps skip curation.
+        let stepsPendingCuration = 0;
 
         for (const step of steps) {
             const resources = await db
@@ -83,16 +85,21 @@ export async function GET(
 
             if (resources.length > 0) {
                 stepsWithResources++;
+            } else if (step.intentExtractedAt) {
+                // Intent was extracted but no resources yet — curation is in progress
+                stepsPendingCuration++;
             }
+            // Steps without intentExtractedAt AND without resources were manually
+            // added — curation was never triggered, so they're not "pending"
         }
 
-        // allCurated is true when all steps have at least one resource
-        const allCurated = totalSteps > 0 && stepsWithResources === totalSteps;
+        // allCurated is true when no steps are waiting for curation results
+        const allCurated = stepsPendingCuration === 0;
 
         return NextResponse.json({
             resources: resourcesByStep,
             allCurated,
-            totalSteps,
+            totalSteps: steps.length,
             stepsWithResources,
         });
     } catch (error) {

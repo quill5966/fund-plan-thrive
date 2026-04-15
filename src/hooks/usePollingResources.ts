@@ -28,12 +28,12 @@ interface UsePollingResourcesResult {
 
 /**
  * Custom hook for polling goal resources.
- * 
+ *
  * - Fetches resources on mount
- * - Polls at configurable interval (default: 3 seconds)
+ * - Polls at configurable interval (default: 10 seconds)
  * - Stops polling when all resources are curated
  * - Cleans up interval on unmount
- * 
+ *
  * @param goalId - The ID of the goal to poll resources for
  * @param interval - Polling interval in milliseconds (default: 10000)
  * @param enabled - Whether polling should be enabled (default: true)
@@ -48,8 +48,18 @@ export function usePollingResources(
     const [allCurated, setAllCurated] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    // Use ref to track if component is mounted
     const isMountedRef = useRef(true);
+    const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+    const stopPolling = useCallback(() => {
+        if (intervalRef.current !== null) {
+            clearInterval(intervalRef.current);
+            intervalRef.current = null;
+        }
+        if (isMountedRef.current) {
+            setIsPolling(false);
+        }
+    }, []);
 
     const fetchResources = useCallback(async () => {
         if (!goalId) return;
@@ -63,7 +73,6 @@ export function usePollingResources(
 
             const data: PollingResponse = await response.json();
 
-            // Only update state if component is still mounted
             if (isMountedRef.current) {
                 setResources(data.resources);
                 setAllCurated(data.allCurated);
@@ -71,6 +80,7 @@ export function usePollingResources(
 
                 if (data.allCurated) {
                     console.log(`[usePollingResources] All resources curated for goal ${goalId}, stopping poll`);
+                    stopPolling();
                 }
             }
         } catch (err) {
@@ -80,7 +90,7 @@ export function usePollingResources(
                 console.error(`[usePollingResources] Error fetching resources:`, err);
             }
         }
-    }, [goalId]);
+    }, [goalId, stopPolling]);
 
     useEffect(() => {
         isMountedRef.current = true;
@@ -89,32 +99,24 @@ export function usePollingResources(
             return;
         }
 
-        // Initial fetch
         console.log(`[usePollingResources] Starting poll for goal ${goalId}`);
         setIsPolling(true);
         fetchResources();
 
-        // Set up polling interval
-        const intervalId = setInterval(() => {
-            // Don't poll if already curated
-            if (allCurated) {
-                console.log(`[usePollingResources] All curated, clearing interval`);
-                clearInterval(intervalId);
-                setIsPolling(false);
-                return;
-            }
-
+        intervalRef.current = setInterval(() => {
             fetchResources();
         }, interval);
 
-        // Cleanup
         return () => {
             isMountedRef.current = false;
-            clearInterval(intervalId);
+            if (intervalRef.current !== null) {
+                clearInterval(intervalRef.current);
+                intervalRef.current = null;
+            }
             setIsPolling(false);
             console.log(`[usePollingResources] Cleanup for goal ${goalId}`);
         };
-    }, [goalId, interval, enabled, fetchResources, allCurated]);
+    }, [goalId, interval, enabled, fetchResources]);
 
     return { resources, isPolling, allCurated, error };
 }

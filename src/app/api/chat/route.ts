@@ -10,7 +10,7 @@ import { speechService } from "@/services/speech/transcribe";
 import { userService } from "@/services/user";
 import { curateResourcesForGoal } from "@/services/resources";
 import { getSession } from "@/lib/session";
-import { validateInputLength, validateToolParams, validateSteps } from "@/lib/validation";
+import { validateInputLength, validateToolParams, validateSteps, validateStep } from "@/lib/validation";
 import { checkRateLimit } from "@/lib/rate-limit";
 
 const getCurrentDate = () => new Date().toISOString().split('T')[0];
@@ -50,6 +50,9 @@ After the initial consultation is complete, continue acting as the user's person
 - If the user mentions a new goal (not already in Current Goals), gather a title, description, and rough steps, then call create_goal.
 - If the user updates their financial picture (new account, changed balance, paid off debt), call update_asset or update_debt.
 - If the user reports progress on a goal or asks to mark it complete, call update_goal.
+- To add a step to an existing goal, call add_goal_step (one call per step). Set isUserDefined=true for steps the user explicitly requests, false for AI-suggested ones.
+- To change an existing step's description, call update_goal_step with the step ID from Current Goals.
+- To remove a step, call delete_goal_step. This cascades to its tasks and resources.
 Never require the full consultation flow to repeat before recording data. Record it as soon as you have enough information.
 
 Current Date: ${getCurrentDate()}
@@ -97,6 +100,21 @@ const updateGoalSchema = z.object({
     id: z.string().describe("UUID of the goal to update"),
     currentAmount: z.number().optional().describe("New saved amount"),
     status: z.enum(['active', 'completed', 'archived']).optional(),
+});
+
+const addGoalStepSchema = z.object({
+    goalId: z.string().describe("UUID of the goal to add a step to"),
+    description: z.string().describe("Description of the new step"),
+    isUserDefined: z.boolean().describe("true if user explicitly requested this step, false if AI-suggested"),
+});
+
+const updateGoalStepSchema = z.object({
+    stepId: z.string().describe("UUID of the step to update (from the Current Goals list)"),
+    description: z.string().describe("New description for the step"),
+});
+
+const deleteGoalStepSchema = z.object({
+    stepId: z.string().describe("UUID of the step to delete (from the Current Goals list). This also deletes all tasks and resources under it."),
 });
 
 /**
@@ -205,7 +223,12 @@ export async function POST(request: NextRequest) {
         // 5. Fetch existing goals and financial data for context
         const existingGoals = await financeService.getGoals(userId);
         const goalsContext = existingGoals.length > 0
-            ? "\n\nCurrent Goals:\n" + existingGoals.map(g => `- [${g.id}] ${g.title}: ${g.status}`).join("\n")
+            ? "\n\nCurrent Goals:\n" + existingGoals.map(g => {
+                const stepsLines = g.steps.map((s: any, i: number) =>
+                    `  ${i + 1}. [${s.id}] ${s.description} (${s.isCompleted ? "✓" : "○"})`
+                ).join("\n");
+                return `- [${g.id}] ${g.title}: ${g.status} ($${g.currentAmount}/$${g.targetAmount})\n${stepsLines}`;
+            }).join("\n")
             : "";
 
         // Fetch existing assets/debts for deduplication context
@@ -294,7 +317,7 @@ export async function POST(request: NextRequest) {
                 },
             }),
             update_goal: tool({
-                description: "Update an existing goal's progress or status",
+                description: "Update a goal's saved amount (currentAmount) or status (active/completed/archived). DO NOT use this to modify step descriptions — use update_goal_step instead.",
                 inputSchema: updateGoalSchema,
                 execute: async (data) => {
                     await financeService.updateGoal(uid, data.id, {
@@ -302,6 +325,55 @@ export async function POST(request: NextRequest) {
                         status: data.status,
                     });
                     return { success: true, message: `Updated goal` };
+                },
+            }),
+            add_goal_step: tool({
+                description: "Add a new step to an existing goal",
+                inputSchema: addGoalStepSchema,
+                execute: async ({ goalId, description, isUserDefined }) => {
+                    try {
+                        const check = validateStep(description);
+                        if (!check.valid) return { success: false, message: check.error };
+                        console.log(`[Chat] Tool called: add_goal_step | goalId=${goalId} | description="${description}"`);
+                        await financeService.createStep(goalId, uid, description, isUserDefined);
+                        return { success: true, message: `Added step: "${description}"` };
+                    } catch (error) {
+                        const msg = error instanceof Error ? error.message : "Unknown error";
+                        console.error(`[Chat] add_goal_step failed:`, msg);
+                        return { success: false, message: msg };
+                    }
+                },
+            }),
+            update_goal_step: tool({
+                description: "Update the description of an existing goal step. Use the step ID from the Current Goals list.",
+                inputSchema: updateGoalStepSchema,
+                execute: async ({ stepId, description }) => {
+                    try {
+                        const check = validateStep(description);
+                        if (!check.valid) return { success: false, message: check.error };
+                        console.log(`[Chat] Tool called: update_goal_step | stepId=${stepId} | description="${description}"`);
+                        await financeService.updateStep(stepId, uid, description);
+                        return { success: true, message: `Updated step to: "${description}"` };
+                    } catch (error) {
+                        const msg = error instanceof Error ? error.message : "Unknown error";
+                        console.error(`[Chat] update_goal_step failed:`, msg);
+                        return { success: false, message: msg };
+                    }
+                },
+            }),
+            delete_goal_step: tool({
+                description: "Delete a goal step and all its tasks and resources",
+                inputSchema: deleteGoalStepSchema,
+                execute: async ({ stepId }) => {
+                    try {
+                        console.log(`[Chat] Tool called: delete_goal_step | stepId=${stepId}`);
+                        await financeService.deleteStep(stepId, uid);
+                        return { success: true, message: `Deleted step ${stepId} and its tasks/resources` };
+                    } catch (error) {
+                        const msg = error instanceof Error ? error.message : "Unknown error";
+                        console.error(`[Chat] delete_goal_step failed:`, msg);
+                        return { success: false, message: msg };
+                    }
                 },
             }),
         });
@@ -313,6 +385,18 @@ export async function POST(request: NextRequest) {
             messages: messagesForLLM,
             tools: createTools(userId),
             stopWhen: stepCountIs(10),
+            onStepFinish: ({ toolCalls, toolResults }) => {
+                if (toolCalls && toolCalls.length > 0) {
+                    for (const tc of toolCalls) {
+                        console.log(`[Chat] Tool called: ${tc.toolName} | args: ${JSON.stringify(tc.args)}`);
+                    }
+                }
+                if (toolResults && toolResults.length > 0) {
+                    for (const tr of toolResults) {
+                        console.log(`[Chat] Tool result: ${tr.toolName} → ${JSON.stringify(tr.result)}`);
+                    }
+                }
+            },
             onFinish: async ({ text }) => {
                 // Save assistant response
                 if (text) {

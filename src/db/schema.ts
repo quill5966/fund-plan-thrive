@@ -102,6 +102,7 @@ export const goalSteps = pgTable("goal_steps", {
   resourceTypesNeeded: text("resource_types_needed"),  // JSON array: ["guide", "checklist", "calculator", "dataset", "video", "template"]
   queryTerms: text("query_terms"),  // JSON array: 1 high-quality search query (limited for Brave free tier)
   intentExtractedAt: timestamp("intent_extracted_at"),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
 // Goal Step Tasks table

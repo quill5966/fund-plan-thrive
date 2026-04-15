@@ -453,38 +453,16 @@ export const financeService = {
     async updateGoal(userId: string, goalId: string, updates: {
         currentAmount?: number;
         status?: 'active' | 'completed' | 'archived';
-        newSteps?: string[];
     }) {
         // Validate ownership
         const existing = await db.select().from(goals).where(and(eq(goals.id, goalId), eq(goals.userId, userId)));
         if (!existing.length) throw new Error("Goal not found");
 
-        return await db.transaction(async (tx) => {
-            // Update fields
-            const setValues: any = { updatedAt: new Date() };
-            if (updates.currentAmount !== undefined) setValues.currentAmount = sql`${updates.currentAmount}`;
-            if (updates.status) setValues.status = updates.status;
+        const setValues: any = { updatedAt: new Date() };
+        if (updates.currentAmount !== undefined) setValues.currentAmount = sql`${updates.currentAmount}`;
+        if (updates.status) setValues.status = updates.status;
 
-            await tx.update(goals).set(setValues).where(eq(goals.id, goalId));
-
-            // Add new steps if any
-            if (updates.newSteps && updates.newSteps.length > 0) {
-                // Get current max order
-                // Simple heuristic: count existing steps
-                const existingSteps = await tx.select().from(goalSteps).where(eq(goalSteps.goalId, goalId));
-                let nextOrder = existingSteps.length + 1;
-
-                for (const stepDesc of updates.newSteps) {
-                    await tx.insert(goalSteps).values({
-                        goalId,
-                        description: stepDesc,
-                        order: `${nextOrder}`,
-                        isCompleted: false
-                    });
-                    nextOrder++;
-                }
-            }
-        });
+        await db.update(goals).set(setValues).where(eq(goals.id, goalId));
     },
 
     async getGoals(userId: string) {
@@ -567,7 +545,7 @@ export const financeService = {
 
     // ─── Step CRUD ──────────────────────────────────────────────────────────────
 
-    async createStep(goalId: string, userId: string, description: string) {
+    async createStep(goalId: string, userId: string, description: string, isUserDefined: boolean = true) {
         // Validate goal ownership
         const [goal] = await db.select().from(goals)
             .where(and(eq(goals.id, goalId), eq(goals.userId, userId)))
@@ -584,7 +562,7 @@ export const financeService = {
             description: description.trim(),
             order: `${nextOrder}`,
             isCompleted: false,
-            isUserDefined: true,
+            isUserDefined,
         }).returning();
 
         // Return with empty resources and tasks for consistency with getGoals shape
@@ -594,7 +572,7 @@ export const financeService = {
     async updateStep(stepId: string, userId: string, description: string) {
         await verifyStepOwnership(stepId, userId);
         const [updated] = await db.update(goalSteps)
-            .set({ description: description.trim() })
+            .set({ description: description.trim(), updatedAt: new Date() })
             .where(eq(goalSteps.id, stepId))
             .returning();
         return updated;
